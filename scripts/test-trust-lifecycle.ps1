@@ -38,8 +38,17 @@ function Run-Comms-AllowFailure {
 
     Write-Host ""
     Write-Host "> go run .\cmd\comms $($Args -join ' ')"
-    $Output = go run .\cmd\comms @Args 2>&1
-    $ExitCode = $LASTEXITCODE
+
+    $PreviousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+
+    try {
+        $Output = & go run .\cmd\comms @Args 2>&1
+        $ExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $PreviousErrorActionPreference
+    }
 
     $Output | ForEach-Object { Write-Host $_ }
 
@@ -137,3 +146,4 @@ finally {
     Remove-Item -Recurse -Force ".trust-alice-$RunId" -ErrorAction SilentlyContinue
     Remove-Item -Recurse -Force ".trust-bob-$RunId" -ErrorAction SilentlyContinue
 }
+
