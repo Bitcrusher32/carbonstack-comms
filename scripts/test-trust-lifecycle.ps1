@@ -13,6 +13,7 @@ $BobState = ".trust-bob-$RunId\state.json"
 $AliceInvite = "trust-alice-$RunId"
 $BobInvite = "trust-bob-$RunId"
 $VerifiedMessage = "phase2a verified send $RunId"
+$ReverifiedMessage = "phase2a reverified send $RunId"
 $ChangedDevMessage = "phase2a dev override after changed key $RunId"
 
 function Run-Comms {
@@ -28,6 +29,26 @@ function Run-Comms {
     if ($LASTEXITCODE -ne 0) {
         throw "command failed: go run .\cmd\comms $($Args -join ' ')"
     }
+}
+
+function Run-Comms-Capture {
+    param(
+        [Parameter(ValueFromRemainingArguments = $true)]
+        [string[]]$Args
+    )
+
+    Write-Host ""
+    Write-Host "> go run .\cmd\comms $($Args -join ' ')"
+    $Output = go run .\cmd\comms @Args
+    $ExitCode = $LASTEXITCODE
+
+    $Output | ForEach-Object { Write-Host $_ }
+
+    if ($ExitCode -ne 0) {
+        throw "command failed: go run .\cmd\comms $($Args -join ' ')"
+    }
+
+    return $Output
 }
 
 function Run-Comms-AllowFailure {
@@ -85,20 +106,25 @@ try {
 
     Run-Comms verify-device --state $AliceState --device $BobDeviceId --public-key $BobPublicIdentityKey --label "trust-bob-device-$RunId"
 
-    $HistoryOutput = go run .\cmd\comms trust-history --state $AliceState
-    $HistoryOutput | ForEach-Object { Write-Host $_ }
-
-    if ($LASTEXITCODE -ne 0) {
-        throw "trust-history command failed"
+    $TrustListVerified = Run-Comms-Capture trust-list --state $AliceState
+    if (-not ($TrustListVerified | Where-Object { $_ -eq "trust_state: verified" })) {
+        throw "trust-list did not show verified state after verification"
     }
 
+    $HistoryOutput = Run-Comms-Capture trust-history --state $AliceState
     if (-not ($HistoryOutput | Where-Object { $_ -like "event_type: device_verified" })) {
         throw "expected device_verified event in trust history"
     }
 
     Run-Comms send --state $AliceState --to-device $BobDeviceId --message $VerifiedMessage --strict
 
-    Run-Comms simulate-key-change --state $AliceState --device $BobDeviceId --new-public-key "fake-new-bob-key-$RunId"
+    $ChangedPublicKey = "fake-new-bob-key-$RunId"
+    Run-Comms simulate-key-change --state $AliceState --device $BobDeviceId --new-public-key $ChangedPublicKey
+
+    $TrustListChanged = Run-Comms-Capture trust-list --state $AliceState
+    if (-not ($TrustListChanged | Where-Object { $_ -eq "trust_state: changed" })) {
+        throw "trust-list did not show changed state after simulated key change"
+    }
 
     $StrictChanged = Run-Comms-AllowFailure send --state $AliceState --to-device $BobDeviceId --message "this should block" --strict
 
@@ -112,7 +138,21 @@ try {
 
     Run-Comms send --state $AliceState --to-device $BobDeviceId --message $ChangedDevMessage
 
+    Run-Comms verify-device --state $AliceState --device $BobDeviceId --public-key $ChangedPublicKey --label "trust-bob-device-$RunId"
+
+    $TrustListReverified = Run-Comms-Capture trust-list --state $AliceState
+    if (-not ($TrustListReverified | Where-Object { $_ -eq "trust_state: verified" })) {
+        throw "trust-list did not show verified state after reverify"
+    }
+
+    Run-Comms send --state $AliceState --to-device $BobDeviceId --message $ReverifiedMessage --strict
+
     Run-Comms revoke-device --state $AliceState --device $BobDeviceId
+
+    $TrustListRevoked = Run-Comms-Capture trust-list --state $AliceState
+    if (-not ($TrustListRevoked | Where-Object { $_ -eq "trust_state: revoked" })) {
+        throw "trust-list did not show revoked state after revocation"
+    }
 
     $RevokedDev = Run-Comms-AllowFailure send --state $AliceState --to-device $BobDeviceId --message "this should block even in dev"
 
@@ -124,8 +164,7 @@ try {
         throw "revoked-device failure did not include revoked warning"
     }
 
-    $FinalHistory = go run .\cmd\comms trust-history --state $AliceState
-    $FinalHistory | ForEach-Object { Write-Host $_ }
+    $FinalHistory = Run-Comms-Capture trust-history --state $AliceState
 
     if (-not ($FinalHistory | Where-Object { $_ -like "event_type: device_verified" })) {
         throw "final trust history missing device_verified"
@@ -146,4 +185,3 @@ finally {
     Remove-Item -Recurse -Force ".trust-alice-$RunId" -ErrorAction SilentlyContinue
     Remove-Item -Recurse -Force ".trust-bob-$RunId" -ErrorAction SilentlyContinue
 }
-

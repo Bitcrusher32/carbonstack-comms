@@ -36,6 +36,8 @@ func Run(args []string) error {
 		return cmdVerifyDevice(args[1:])
 	case "trust-history":
 		return cmdTrustHistory(args[1:])
+	case "trust-list":
+		return cmdTrustList(args[1:])
 	case "simulate-key-change":
 		return cmdSimulateKeyChange(args[1:])
 	case "revoke-device":
@@ -63,6 +65,7 @@ func usage() {
 	fmt.Println("  fingerprint")
 	fmt.Println("  verify-device")
 	fmt.Println("  trust-history")
+	fmt.Println("  trust-list")
 	fmt.Println("  simulate-key-change")
 	fmt.Println("  revoke-device")
 	fmt.Println("  send")
@@ -325,6 +328,34 @@ func cmdTrustHistory(args []string) error {
 		fmt.Printf("fingerprint: %s\n", event.Fingerprint)
 		fmt.Printf("event_time: %s\n", event.EventTime)
 		fmt.Printf("note: %s\n", event.Note)
+	}
+
+	return nil
+}
+
+func cmdTrustList(args []string) error {
+	fs := flag.NewFlagSet("trust-list", flag.ExitOnError)
+	statePath := fs.String("state", state.DefaultStatePath, "local state file path")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	paths := trust.PathsForStatePath(*statePath)
+	store, err := trust.LoadStore(paths.TrustPath)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("trusted_devices: %d\n", len(store.TrustedDevices))
+	for _, record := range store.TrustedDevices {
+		fmt.Println()
+		fmt.Printf("device_id: %s\n", record.DeviceID)
+		fmt.Printf("account_id: %s\n", record.AccountID)
+		fmt.Printf("label: %s\n", record.DisplayLabel)
+		fmt.Printf("trust_state: %s\n", record.TrustState)
+		fmt.Printf("fingerprint: %s\n", record.Fingerprint)
+		fmt.Printf("first_seen_at: %s\n", record.FirstSeenAt)
+		fmt.Printf("last_seen_at: %s\n", record.LastSeenAt)
 	}
 
 	return nil
