@@ -4,9 +4,14 @@
 .bob/
 .test-alice-*/
 .test-bob-*/
+.trust-alice-*/
+.trust-bob-*/
+.phase2a-alice/
+.phase2a-bob/
 *.state.json
 messages.jsonl
 trust.json
+trust-events.jsonl
 
 # Local databases accidentally generated during integration work
 cypher.db
