@@ -10,6 +10,7 @@ import (
 	"git.bitcrusher32.win/bitcrusher32/carbonstack-comms/internal/client"
 	"git.bitcrusher32.win/bitcrusher32/carbonstack-comms/internal/crypto"
 	"git.bitcrusher32.win/bitcrusher32/carbonstack-comms/internal/state"
+	"git.bitcrusher32.win/bitcrusher32/carbonstack-comms/internal/trust"
 )
 
 func Run(args []string) error {
@@ -29,6 +30,16 @@ func Run(args []string) error {
 		return cmdRegisterDevice(args[1:])
 	case "list-devices":
 		return cmdListDevices(args[1:])
+	case "fingerprint":
+		return cmdFingerprint(args[1:])
+	case "verify-device":
+		return cmdVerifyDevice(args[1:])
+	case "trust-history":
+		return cmdTrustHistory(args[1:])
+	case "simulate-key-change":
+		return cmdSimulateKeyChange(args[1:])
+	case "revoke-device":
+		return cmdRevokeDevice(args[1:])
 	case "send":
 		return cmdSend(args[1:])
 	case "inbox":
@@ -41,7 +52,7 @@ func Run(args []string) error {
 }
 
 func usage() {
-	fmt.Println("CarbonStackComms Phase 1 CLI")
+	fmt.Println("CarbonStackComms Phase 2A CLI")
 	fmt.Println()
 	fmt.Println("Commands:")
 	fmt.Println("  init")
@@ -49,6 +60,11 @@ func usage() {
 	fmt.Println("  claim-invite")
 	fmt.Println("  register-device")
 	fmt.Println("  list-devices")
+	fmt.Println("  fingerprint")
+	fmt.Println("  verify-device")
+	fmt.Println("  trust-history")
+	fmt.Println("  simulate-key-change")
+	fmt.Println("  revoke-device")
 	fmt.Println("  send")
 	fmt.Println("  inbox")
 	fmt.Println("  ack")
@@ -181,6 +197,7 @@ func cmdRegisterDevice(args []string) error {
 	fmt.Printf("device_id: %s\n", resp.DeviceID)
 	fmt.Printf("account_id: %s\n", resp.AccountID)
 	fmt.Printf("created_at: %s\n", resp.CreatedAt)
+	fmt.Printf("dev_fingerprint: %s\n", trust.Fingerprint(publicIdentityKey))
 	return nil
 }
 
@@ -211,14 +228,147 @@ func cmdListDevices(args []string) error {
 		return err
 	}
 
+	paths := trust.PathsForStatePath(*statePath)
+
 	fmt.Printf("account_id: %s\n", resp.AccountID)
 	for _, d := range resp.Devices {
+		trustState := trust.StateUnknown
+		if record, ok, err := trust.LookupDevice(paths, d.DeviceID); err == nil && ok {
+			trustState = record.TrustState
+		}
+
 		fmt.Println()
 		fmt.Printf("device_id: %s\n", d.DeviceID)
 		fmt.Printf("label: %s\n", d.DeviceLabel)
 		fmt.Printf("public_identity_key: %s\n", d.PublicIdentityKey)
+		fmt.Printf("dev_fingerprint: %s\n", trust.Fingerprint(d.PublicIdentityKey))
+		fmt.Printf("trust_state: %s\n", trustState)
 		fmt.Printf("created_at: %s\n", d.CreatedAt)
 	}
+	return nil
+}
+
+func cmdFingerprint(args []string) error {
+	fs := flag.NewFlagSet("fingerprint", flag.ExitOnError)
+	statePath := fs.String("state", state.DefaultStatePath, "local state file path")
+	publicKey := fs.String("public-key", "", "public identity key to fingerprint")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	if *publicKey != "" {
+		fmt.Printf("dev_fingerprint: %s\n", trust.Fingerprint(*publicKey))
+		return nil
+	}
+
+	s, err := state.RequireReadyDevice(*statePath)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("device_id: %s\n", s.DeviceID)
+	fmt.Printf("device_label: %s\n", s.DeviceLabel)
+	fmt.Printf("public_identity_key: %s\n", s.PublicIdentityKey)
+	fmt.Printf("dev_fingerprint: %s\n", trust.Fingerprint(s.PublicIdentityKey))
+	return nil
+}
+
+func cmdVerifyDevice(args []string) error {
+	fs := flag.NewFlagSet("verify-device", flag.ExitOnError)
+	statePath := fs.String("state", state.DefaultStatePath, "local state file path")
+	accountID := fs.String("account", "", "account ID for the device")
+	deviceID := fs.String("device", "", "device ID to verify")
+	label := fs.String("label", "", "display label")
+	publicKey := fs.String("public-key", "", "public identity key")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	if *deviceID == "" || *publicKey == "" {
+		return errors.New("--device and --public-key are required")
+	}
+
+	paths := trust.PathsForStatePath(*statePath)
+	record, err := trust.VerifyDevice(paths, *accountID, *deviceID, *label, *publicKey, "cli")
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("device verified")
+	fmt.Printf("device_id: %s\n", record.DeviceID)
+	fmt.Printf("trust_state: %s\n", record.TrustState)
+	fmt.Printf("dev_fingerprint: %s\n", record.Fingerprint)
+	return nil
+}
+
+func cmdTrustHistory(args []string) error {
+	fs := flag.NewFlagSet("trust-history", flag.ExitOnError)
+	statePath := fs.String("state", state.DefaultStatePath, "local state file path")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	paths := trust.PathsForStatePath(*statePath)
+	events, err := trust.LoadEvents(paths.EventsPath)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("trust_events: %d\n", len(events))
+	for _, event := range events {
+		fmt.Println()
+		fmt.Printf("event_id: %s\n", event.EventID)
+		fmt.Printf("event_type: %s\n", event.EventType)
+		fmt.Printf("device_id: %s\n", event.DeviceID)
+		fmt.Printf("previous_state: %s\n", event.PreviousTrustState)
+		fmt.Printf("new_state: %s\n", event.NewTrustState)
+		fmt.Printf("fingerprint: %s\n", event.Fingerprint)
+		fmt.Printf("event_time: %s\n", event.EventTime)
+		fmt.Printf("note: %s\n", event.Note)
+	}
+
+	return nil
+}
+
+func cmdSimulateKeyChange(args []string) error {
+	fs := flag.NewFlagSet("simulate-key-change", flag.ExitOnError)
+	statePath := fs.String("state", state.DefaultStatePath, "local state file path")
+	deviceID := fs.String("device", "", "device ID to mark changed")
+	publicKey := fs.String("new-public-key", "", "new public identity key")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	paths := trust.PathsForStatePath(*statePath)
+	record, err := trust.MarkDeviceChanged(paths, *deviceID, *publicKey, "cli")
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("device marked changed")
+	fmt.Printf("device_id: %s\n", record.DeviceID)
+	fmt.Printf("trust_state: %s\n", record.TrustState)
+	fmt.Printf("dev_fingerprint: %s\n", record.Fingerprint)
+	return nil
+}
+
+func cmdRevokeDevice(args []string) error {
+	fs := flag.NewFlagSet("revoke-device", flag.ExitOnError)
+	statePath := fs.String("state", state.DefaultStatePath, "local state file path")
+	deviceID := fs.String("device", "", "device ID to revoke")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	paths := trust.PathsForStatePath(*statePath)
+	record, err := trust.RevokeDevice(paths, *deviceID, "cli")
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("device revoked")
+	fmt.Printf("device_id: %s\n", record.DeviceID)
+	fmt.Printf("trust_state: %s\n", record.TrustState)
 	return nil
 }
 
@@ -227,6 +377,7 @@ func cmdSend(args []string) error {
 	statePath := fs.String("state", state.DefaultStatePath, "local state file path")
 	toDevice := fs.String("to-device", "", "recipient device ID")
 	message := fs.String("message", "", "message text")
+	strict := fs.Bool("strict", false, "block sending to unknown, unverified, or changed devices")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -238,6 +389,20 @@ func cmdSend(args []string) error {
 	s, err := state.RequireReadyDevice(*statePath)
 	if err != nil {
 		return err
+	}
+
+	paths := trust.PathsForStatePath(*statePath)
+	decision, err := trust.EvaluateSend(paths, *toDevice, *strict)
+	if err != nil {
+		return err
+	}
+
+	if decision.Warning != "" {
+		fmt.Printf("WARNING: %s\n", decision.Warning)
+	}
+
+	if !decision.Allowed {
+		return fmt.Errorf("send blocked by trust policy: recipient trust_state=%s", decision.TrustState)
 	}
 
 	provider := crypto.MockCryptoProvider{}
