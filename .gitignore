@@ -2,9 +2,17 @@
 .carbonstack-comms/
 .alice/
 .bob/
+.test-alice-*/
+.test-bob-*/
 *.state.json
 messages.jsonl
 trust.json
+
+# Local databases accidentally generated during integration work
+cypher.db
+*.db
+*.db-shm
+*.db-wal
 
 # Logs
 *.log
