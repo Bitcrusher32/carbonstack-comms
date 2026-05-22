@@ -1,8 +1,49 @@
 ﻿use openmls::prelude::*;
 use openmls_basic_credential::SignatureKeyPair;
-use openmls_rust_crypto::OpenMlsRustCrypto;
+use openmls_memory_storage::MemoryStorage;
+use openmls_rust_crypto::RustCrypto;
 use openmls_traits::OpenMlsProvider;
+use std::env;
+use std::fs::File;
+use std::path::PathBuf;
 use tls_codec::DeserializeBytes;
+
+const ALICE_STORAGE_NAME: &str = "carbonstack_openmls_alice";
+const BOB_STORAGE_NAME: &str = "carbonstack_openmls_bob";
+const ALICE_SIGNER_FILE_NAME: &str = "carbonstack_openmls_alice_signer.json";
+const GROUP_ID_BYTES: &[u8] = b"carbonstack-openmls-minimal-group";
+
+struct CarbonStackScratchProvider {
+    crypto: RustCrypto,
+    key_store: MemoryStorage,
+}
+
+impl Default for CarbonStackScratchProvider {
+    fn default() -> Self {
+        Self {
+            crypto: RustCrypto::default(),
+            key_store: MemoryStorage::default(),
+        }
+    }
+}
+
+impl OpenMlsProvider for CarbonStackScratchProvider {
+    type CryptoProvider = RustCrypto;
+    type RandProvider = RustCrypto;
+    type StorageProvider = MemoryStorage;
+
+    fn storage(&self) -> &Self::StorageProvider {
+        &self.key_store
+    }
+
+    fn crypto(&self) -> &Self::CryptoProvider {
+        &self.crypto
+    }
+
+    fn rand(&self) -> &Self::RandProvider {
+        &self.crypto
+    }
+}
 
 struct DeviceSetup {
     label: &'static str,
@@ -12,12 +53,31 @@ struct DeviceSetup {
 }
 
 fn main() {
-    println!("CarbonStack OpenMLS two-message state-continuity probe");
-    println!("Scope: local two-member group, two app messages, provider state continuity inside one run");
+    let args: Vec<String> = env::args().collect();
+    let mode = args.get(1).map(|s| s.as_str()).unwrap_or("help");
+
+    match mode {
+        "phase-a" => phase_a(),
+        "phase-b" => phase_b(),
+        _ => {
+            println!("CarbonStack OpenMLS MemoryStorage persistence probe");
+            println!("Usage:");
+            println!("  cargo run -- phase-a");
+            println!("  cargo run -- phase-b");
+            println!();
+            println!("phase-a creates Alice/Bob MLS state, sends message one, and saves MemoryStorage files.");
+            println!("phase-b loads fresh providers from MemoryStorage files, reloads groups, and sends message two.");
+        }
+    }
+}
+
+fn phase_a() {
+    println!("CarbonStack OpenMLS MemoryStorage persistence probe: phase-a");
+    println!("Scope: create state, send/open message one, save Alice/Bob MemoryStorage files");
     println!("Integration: none");
 
-    let alice_provider = OpenMlsRustCrypto::default();
-    let bob_provider = OpenMlsRustCrypto::default();
+    let alice_provider = CarbonStackScratchProvider::default();
+    let bob_provider = CarbonStackScratchProvider::default();
 
     let ciphersuite = Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
 
@@ -36,7 +96,7 @@ fn main() {
         .use_ratchet_tree_extension(true)
         .build();
 
-    let group_id = GroupId::from_slice(b"carbonstack-openmls-minimal-group");
+    let group_id = GroupId::from_slice(GROUP_ID_BYTES);
 
     let mut alice_group = MlsGroup::new_with_group_id(
         &alice_provider,
@@ -108,7 +168,7 @@ fn main() {
         "Bob group should have exactly two members after joining"
     );
 
-    let message_one = b"message one: hello from Alice over OpenMLS scratch";
+    let message_one = b"phase-a message one: hello before MemoryStorage save";
 
     let opened_one = send_from_alice_to_bob(
         &alice_provider,
@@ -126,52 +186,91 @@ fn main() {
     );
 
     println!(
-        "Bob opened message one: {}",
+        "Bob opened phase-a message one: {}",
         String::from_utf8_lossy(&opened_one)
     );
 
-    println!("State continuity checkpoint:");
-    println!("Alice epoch after message one: {:?}", alice_group.epoch());
-    println!("Bob epoch after message one: {:?}", bob_group.epoch());
-    println!("Bob member count after message one: {}", bob_group.members().count());
+    println!("Saving Alice signer file");
+    save_alice_signer(&alice.signer);
 
-    println!("Reloading Alice group from Alice provider storage");
-    let alice_group_id = alice_group.group_id().clone();
-    let mut loaded_alice_group = MlsGroup::load(alice_provider.storage(), &alice_group_id)
-        .expect("failed to load Alice group from provider storage")
-        .expect("Alice group was not found in provider storage");
+    println!("Saving Alice MemoryStorage file");
+    alice_provider
+        .key_store
+        .save(ALICE_STORAGE_NAME.to_string())
+        .expect("failed to save Alice MemoryStorage");
 
-    println!("Reloading Bob group from Bob provider storage");
-    let bob_group_id = bob_group.group_id().clone();
-    let mut loaded_bob_group = MlsGroup::load(bob_provider.storage(), &bob_group_id)
-        .expect("failed to load Bob group from provider storage")
-        .expect("Bob group was not found in provider storage");
+    println!("Saving Bob MemoryStorage file");
+    bob_provider
+        .key_store
+        .save(BOB_STORAGE_NAME.to_string())
+        .expect("failed to save Bob MemoryStorage");
 
-    println!("Loaded Alice epoch: {:?}", loaded_alice_group.epoch());
-    println!("Loaded Bob epoch: {:?}", loaded_bob_group.epoch());
-    println!("Loaded Alice member count: {}", loaded_alice_group.members().count());
-    println!("Loaded Bob member count: {}", loaded_bob_group.members().count());
+    println!("Phase A succeeded");
+    println!("Saved MemoryStorage files under the OS temp directory using OpenMLS memory-storage persistence helpers.");
+    println!("Next: run cargo run -- phase-b");
+}
+
+fn phase_b() {
+    println!("CarbonStack OpenMLS MemoryStorage persistence probe: phase-b");
+    println!("Scope: load fresh providers from saved MemoryStorage files, reload groups, send/open message two");
+    println!("Integration: none");
+
+    let mut alice_provider = CarbonStackScratchProvider::default();
+    let mut bob_provider = CarbonStackScratchProvider::default();
+
+    println!("Loading Alice MemoryStorage file");
+    alice_provider
+        .key_store
+        .load(ALICE_STORAGE_NAME.to_string())
+        .expect("failed to load Alice MemoryStorage");
+
+    println!("Loading Bob MemoryStorage file");
+    bob_provider
+        .key_store
+        .load(BOB_STORAGE_NAME.to_string())
+        .expect("failed to load Bob MemoryStorage");
+
+    let group_id = GroupId::from_slice(GROUP_ID_BYTES);
+
+    println!("Reloading Alice group from loaded Alice provider storage");
+    let mut alice_group = MlsGroup::load(alice_provider.storage(), &group_id)
+        .expect("failed to load Alice group from loaded provider storage")
+        .expect("Alice group was not found in loaded provider storage");
+
+    println!("Reloading Bob group from loaded Bob provider storage");
+    let mut bob_group = MlsGroup::load(bob_provider.storage(), &group_id)
+        .expect("failed to load Bob group from loaded provider storage")
+        .expect("Bob group was not found in loaded provider storage");
+
+    println!("Loaded Alice epoch: {:?}", alice_group.epoch());
+    println!("Loaded Bob epoch: {:?}", bob_group.epoch());
+    println!("Loaded Alice member count: {}", alice_group.members().count());
+    println!("Loaded Bob member count: {}", bob_group.members().count());
 
     assert_eq!(
-        loaded_alice_group.members().count(),
+        alice_group.members().count(),
         2,
         "Loaded Alice group should have exactly two members"
     );
 
     assert_eq!(
-        loaded_bob_group.members().count(),
+        bob_group.members().count(),
         2,
         "Loaded Bob group should have exactly two members"
     );
 
-    let message_two = b"message two: storage reload check after processing message one";
+    let alice_signer = load_alice_signer();
+
+    println!("Phase-b loaded Alice signer from temp file.");
+
+    let message_two = b"phase-b message two: hello after MemoryStorage load";
 
     let opened_two = send_from_alice_to_bob(
         &alice_provider,
         &bob_provider,
-        &alice.signer,
-        &mut loaded_alice_group,
-        &mut loaded_bob_group,
+        &alice_signer,
+        &mut alice_group,
+        &mut bob_group,
         message_two,
     );
 
@@ -182,17 +281,16 @@ fn main() {
     );
 
     println!(
-        "Bob opened message two: {}",
+        "Bob opened phase-b message two: {}",
         String::from_utf8_lossy(&opened_two)
     );
 
-    println!("OpenMLS same-process storage reload probe succeeded");
-    println!("Persistence conclusion: groups could be loaded from same-process provider storage and used for the second message.");
-    println!("Next rung: identify real disk-backed provider storage/export strategy for process restart.");
+    println!("Phase B succeeded");
+    println!("MemoryStorage file load plus MlsGroup::load allowed a second message after fresh provider construction.");
 }
 
 fn make_device_setup(
-    provider: &OpenMlsRustCrypto,
+    provider: &CarbonStackScratchProvider,
     ciphersuite: Ciphersuite,
     label: &'static str,
 ) -> DeviceSetup {
@@ -237,9 +335,30 @@ fn make_device_setup(
     }
 }
 
+
+fn temp_file_path(file_name: &str) -> PathBuf {
+    env::temp_dir().join(file_name)
+}
+
+fn save_alice_signer(signer: &SignatureKeyPair) {
+    let path = temp_file_path(ALICE_SIGNER_FILE_NAME);
+    let file = File::create(&path).expect("failed to create Alice signer file");
+    serde_json::to_writer_pretty(file, signer).expect("failed to serialize Alice signer");
+    println!("Saved Alice signer file: {}", path.display());
+}
+
+fn load_alice_signer() -> SignatureKeyPair {
+    let path = temp_file_path(ALICE_SIGNER_FILE_NAME);
+    let file = File::open(&path).expect("failed to open Alice signer file");
+    let signer: SignatureKeyPair =
+        serde_json::from_reader(file).expect("failed to deserialize Alice signer");
+    println!("Loaded Alice signer file: {}", path.display());
+    signer
+}
+
 fn send_from_alice_to_bob(
-    alice_provider: &OpenMlsRustCrypto,
-    bob_provider: &OpenMlsRustCrypto,
+    alice_provider: &CarbonStackScratchProvider,
+    bob_provider: &CarbonStackScratchProvider,
     alice_signer: &SignatureKeyPair,
     alice_group: &mut MlsGroup,
     bob_group: &mut MlsGroup,
@@ -281,6 +400,8 @@ fn send_from_alice_to_bob(
         other => panic!("expected application message content, got: {:?}", other),
     }
 }
+
+
 
 
 
