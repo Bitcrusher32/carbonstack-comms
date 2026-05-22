@@ -16,7 +16,7 @@ This is not real CarbonStack messaging.
 
 Current stage:
 
-- OpenMLS local two-message state-continuity probe
+- OpenMLS local same-process provider-storage reload probe
 
 This stage proves only:
 
@@ -164,4 +164,29 @@ This does not validate:
 
 Next persistence work should identify the real OpenMLS provider storage/export strategy.
 
+
+
+## Same-Process Provider Storage Reload Probe
+
+The scratch crate now reloads Alice and Bob `MlsGroup` state from each device's provider storage inside the same process.
+
+This validates:
+
+- `MlsGroup::load(provider.storage(), group_id)` works with the current OpenMLS provider storage.
+- Alice group state can be loaded from Alice provider storage.
+- Bob group state can be loaded from Bob provider storage.
+- Loaded groups preserve epoch and member count.
+- Loaded groups can protect/open a second application message after reload.
+- Provider storage contains usable group state at least within the same process.
+
+This does not validate:
+
+- disk persistence
+- process restart recovery
+- portable provider-state export/import
+- secure vault storage
+- custom storage backend design
+- CarbonStackComms integration
+
+Next persistence work should identify whether OpenMLS 0.8.1 supports practical disk-backed provider storage or whether CarbonStack needs a provider-owned storage adapter/sidecar.
 

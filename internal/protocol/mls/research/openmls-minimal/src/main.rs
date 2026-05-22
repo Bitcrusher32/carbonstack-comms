@@ -1,6 +1,7 @@
 ﻿use openmls::prelude::*;
 use openmls_basic_credential::SignatureKeyPair;
 use openmls_rust_crypto::OpenMlsRustCrypto;
+use openmls_traits::OpenMlsProvider;
 use tls_codec::DeserializeBytes;
 
 struct DeviceSetup {
@@ -134,14 +135,43 @@ fn main() {
     println!("Bob epoch after message one: {:?}", bob_group.epoch());
     println!("Bob member count after message one: {}", bob_group.members().count());
 
-    let message_two = b"message two: state continuity check after processing message one";
+    println!("Reloading Alice group from Alice provider storage");
+    let alice_group_id = alice_group.group_id().clone();
+    let mut loaded_alice_group = MlsGroup::load(alice_provider.storage(), &alice_group_id)
+        .expect("failed to load Alice group from provider storage")
+        .expect("Alice group was not found in provider storage");
+
+    println!("Reloading Bob group from Bob provider storage");
+    let bob_group_id = bob_group.group_id().clone();
+    let mut loaded_bob_group = MlsGroup::load(bob_provider.storage(), &bob_group_id)
+        .expect("failed to load Bob group from provider storage")
+        .expect("Bob group was not found in provider storage");
+
+    println!("Loaded Alice epoch: {:?}", loaded_alice_group.epoch());
+    println!("Loaded Bob epoch: {:?}", loaded_bob_group.epoch());
+    println!("Loaded Alice member count: {}", loaded_alice_group.members().count());
+    println!("Loaded Bob member count: {}", loaded_bob_group.members().count());
+
+    assert_eq!(
+        loaded_alice_group.members().count(),
+        2,
+        "Loaded Alice group should have exactly two members"
+    );
+
+    assert_eq!(
+        loaded_bob_group.members().count(),
+        2,
+        "Loaded Bob group should have exactly two members"
+    );
+
+    let message_two = b"message two: storage reload check after processing message one";
 
     let opened_two = send_from_alice_to_bob(
         &alice_provider,
         &bob_provider,
         &alice.signer,
-        &mut alice_group,
-        &mut bob_group,
+        &mut loaded_alice_group,
+        &mut loaded_bob_group,
         message_two,
     );
 
@@ -156,9 +186,9 @@ fn main() {
         String::from_utf8_lossy(&opened_two)
     );
 
-    println!("OpenMLS two-message state-continuity probe succeeded");
-    println!("Persistence conclusion: in-memory provider/group state remained usable across sequential messages inside one process.");
-    println!("Next rung: identify real provider storage/export strategy for process restart.");
+    println!("OpenMLS same-process storage reload probe succeeded");
+    println!("Persistence conclusion: groups could be loaded from same-process provider storage and used for the second message.");
+    println!("Next rung: identify real disk-backed provider storage/export strategy for process restart.");
 }
 
 fn make_device_setup(
@@ -251,4 +281,6 @@ fn send_from_alice_to_bob(
         other => panic!("expected application message content, got: {:?}", other),
     }
 }
+
+
 
