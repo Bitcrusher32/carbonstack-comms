@@ -16,7 +16,7 @@ This is not real CarbonStack messaging.
 
 Current stage:
 
-- OpenMLS local two-member application-message probe
+- OpenMLS local two-message state-continuity probe
 
 This stage proves only:
 
@@ -32,9 +32,9 @@ This stage proves only:
 - Welcome can be extracted from `MlsMessageOut` body
 - Alice and Bob use separate provider/storage instances
 - Bob can stage Welcome and join into his own `MlsGroup`
-- Alice can create an MLS application message
-- Bob can process/open Alice's application message
-- Bob-opened plaintext matches Alice plaintext
+- Alice can create MLS application messages
+- Bob can process/open Alice's application messages
+- Bob-opened plaintext matches Alice plaintext across the current two-message probe
 
 ## Current Dependencies
 
@@ -163,4 +163,5 @@ This does not validate:
 - CarbonStackComms integration
 
 Next persistence work should identify the real OpenMLS provider storage/export strategy.
+
 
