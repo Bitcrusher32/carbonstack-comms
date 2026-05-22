@@ -1,0 +1,13 @@
+{
+  "carbonstack_mapping_candidate": "provider.signature.invalid",
+  "error_fixture": "invalid-signature-after-signer-mismatch",
+  "openmls_error": "ValidationError(InvalidSignature)",
+  "private_material_included": false,
+  "source_observation": "phase-b initially failed when Alice used a fresh signer after reload",
+  "suggested_trust_action": [
+    "block message",
+    "warn user",
+    "append trust event",
+    "require reverify if identity changed"
+  ]
+}

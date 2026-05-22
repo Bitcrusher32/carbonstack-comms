@@ -1,0 +1,6 @@
+{
+  "device": "alice",
+  "hash_ref_length": 32,
+  "private_material_included": false,
+  "public_setup_type": "KeyPackage"
+}

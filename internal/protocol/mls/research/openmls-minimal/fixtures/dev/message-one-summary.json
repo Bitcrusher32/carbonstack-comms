@@ -1,0 +1,8 @@
+{
+  "content_type": "Application",
+  "message_label": "message-one",
+  "plaintext_length": 45,
+  "plaintext_sample": "fixture message one: provider contract sample",
+  "private_material_included": false,
+  "protected_byte_length": 207
+}

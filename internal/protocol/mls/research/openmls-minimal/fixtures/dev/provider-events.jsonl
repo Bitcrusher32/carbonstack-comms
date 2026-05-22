@@ -1,0 +1,14 @@
+{"event":"provider.fixture.started","mode":"fixtures","provider":"openmls"}
+{"device":"alice","event":"provider.public_bundle.created","hash_ref_length":32}
+{"device":"bob","event":"provider.public_bundle.created","hash_ref_length":32}
+{"creator":"alice","epoch":"GroupEpoch(0)","event":"conversation.created","member_count":1}
+{"encrypted_secret_count":1,"event":"conversation.welcome.created","group_info_present":true}
+{"added":"bob","adder":"alice","alice_epoch_after_merge":"GroupEpoch(1)","alice_member_count":2,"event":"conversation.member_added"}
+{"device":"bob","event":"conversation.welcome.staged","member_count":2}
+{"device":"bob","epoch":"GroupEpoch(1)","event":"conversation.joined","member_count":2}
+{"event":"message.protected","message_label":"message-one","protected_byte_length":207,"sender":"alice"}
+{"event":"message.opened","message_label":"message-one","plaintext_length":45,"receiver":"bob"}
+{"alice_epoch":"GroupEpoch(1)","bob_epoch":"GroupEpoch(1)","event":"conversation.loaded","scope":"same_process_provider_storage"}
+{"event":"message.protected","message_label":"message-two","protected_byte_length":212,"sender":"alice"}
+{"event":"message.opened","message_label":"message-two","plaintext_length":50,"receiver":"bob"}
+{"event":"provider.fixture.completed","private_material_included":false,"status":"success"}

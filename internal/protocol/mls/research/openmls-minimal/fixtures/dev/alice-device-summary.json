@@ -1,0 +1,6 @@
+{
+  "device_label": "carbonstack-alice-device",
+  "private_material_included": false,
+  "public_key_package_hash_ref_length": 32,
+  "role": "alice"
+}

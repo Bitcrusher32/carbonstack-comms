@@ -1,0 +1,14 @@
+{
+  "ciphersuite": "MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519",
+  "fixture_version": "provider-fixture-contract/v0",
+  "group_id_label": "carbonstack-openmls-minimal-group",
+  "implementation": "CarbonStackScratchProvider",
+  "provider_mode": "rust-only-scratch",
+  "provider_name": "openmls",
+  "security_level": "dev-only sanitized summary; not production crypto integration",
+  "warnings": [
+    "OpenMLS is not wired into CarbonStackComms",
+    "fixtures are not production secrets",
+    "provider storage and signer JSON are intentionally not written into fixtures"
+  ]
+}

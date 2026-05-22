@@ -1,0 +1,8 @@
+{
+  "content_type": "Application",
+  "message_label": "message-two",
+  "plaintext_length": 50,
+  "plaintext_sample": "fixture message two: after provider storage reload",
+  "private_material_included": false,
+  "protected_byte_length": 212
+}

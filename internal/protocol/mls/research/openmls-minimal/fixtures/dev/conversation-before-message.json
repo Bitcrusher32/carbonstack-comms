@@ -1,0 +1,9 @@
+{
+  "alice_epoch": "GroupEpoch(0)",
+  "alice_member_count": 1,
+  "bob_epoch": null,
+  "bob_member_count": null,
+  "checkpoint": "before_add",
+  "group_id_label": "carbonstack-openmls-minimal-group",
+  "private_material_included": false
+}
