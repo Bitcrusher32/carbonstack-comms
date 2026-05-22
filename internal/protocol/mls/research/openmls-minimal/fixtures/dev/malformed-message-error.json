@@ -1,0 +1,14 @@
+{
+  "error_fixture": "malformed-provider-message",
+  "provider_event_candidate": "provider.message.tamper.detected",
+  "provider_class": "trust_security",
+  "severity": "security",
+  "trust_relevant": true,
+  "suggested_action": [
+    "block message",
+    "append trust event",
+    "warn user",
+    "retain sanitized diagnostic summary"
+  ],
+  "private_material_included": false
+}

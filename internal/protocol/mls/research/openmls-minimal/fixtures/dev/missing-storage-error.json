@@ -1,0 +1,14 @@
+{
+  "error_fixture": "missing-storage-on-reload",
+  "provider_event_candidate": "storage.missing",
+  "provider_class": "storage_checkpoint",
+  "severity": "warning",
+  "trust_relevant": false,
+  "suggested_action": [
+    "stop operation",
+    "do not send",
+    "show recovery path",
+    "do not mutate provider state further"
+  ],
+  "private_material_included": false
+}

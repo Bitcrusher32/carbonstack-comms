@@ -1,0 +1,14 @@
+{
+  "error_fixture": "missing-signer-on-send",
+  "provider_event_candidate": "provider.secret.material.unavailable",
+  "provider_class": "terminal_fatal",
+  "severity": "fatal",
+  "trust_relevant": true,
+  "suggested_action": [
+    "block send",
+    "preserve local evidence",
+    "show recovery path",
+    "require explicit identity recovery flow"
+  ],
+  "private_material_included": false
+}

@@ -1,0 +1,14 @@
+{
+  "error_fixture": "wrong-group-id-on-load",
+  "provider_event_candidate": "provider.group.unrecoverable",
+  "provider_class": "terminal_fatal",
+  "severity": "fatal",
+  "trust_relevant": true,
+  "suggested_action": [
+    "stop operation",
+    "do not send",
+    "do not open message",
+    "surface provider state mismatch"
+  ],
+  "private_material_included": false
+}
