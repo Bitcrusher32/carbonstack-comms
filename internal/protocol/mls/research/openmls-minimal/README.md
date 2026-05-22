@@ -115,3 +115,31 @@ Not allowed:
 - CarbonStack has a production MLS provider.
 - CarbonStack has selected a final MLS implementation.
 - CarbonStack has hostile-server proof.
+
+## Git Hygiene
+
+Commit only source/control files from this scratch crate:
+
+- `Cargo.toml`
+- `Cargo.lock`
+- `README.md`
+- `src/main.rs`
+
+Do not commit generated Cargo artifacts:
+
+- `target/`
+- `.fingerprint/`
+- `debug/`
+- `release/`
+- `.exe`
+- `.pdb`
+- `.o`
+- generated rustdoc output
+
+Before committing Rust scratch work, run from `carbonstack-comms`:
+
+- `git diff --cached --name-only`
+- `git show --stat --oneline HEAD`
+
+Neither output should contain `target/`, `.exe`, `.pdb`, `.fingerprint`, or `.o`.
+
