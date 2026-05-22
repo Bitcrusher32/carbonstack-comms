@@ -1,43 +1,16 @@
-﻿# CarbonStackComms local development state
-.carbonstack-comms/
+﻿# Local CarbonStackComms state
+.test-*/
+.trust-*/
 .alice/
 .bob/
-.test-alice-*/
-.test-bob-*/
-.trust-alice-*/
-.trust-bob-*/
-.phase2a-alice/
-.phase2a-bob/
-*.state.json
-messages.jsonl
-trust.json
-trust-events.jsonl
-
-# Local databases accidentally generated during integration work
-cypher.db
 *.db
 *.db-shm
 *.db-wal
 
-# Logs
-*.log
-
-# Environment / secrets
-.env
-.env.*
-*.pem
-*.key
-*.crt
-*.p12
-
-# Build outputs
-comms.exe
-bin/
-dist/
-build/
-
-# Editor / OS noise
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
+# Rust/Cargo generated artifacts
+target/
+**/target/
+**/doc/
+**/.fingerprint/
+**/debug/
+**/release/
