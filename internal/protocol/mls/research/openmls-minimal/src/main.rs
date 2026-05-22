@@ -11,8 +11,8 @@ struct DeviceSetup {
 }
 
 fn main() {
-    println!("CarbonStack OpenMLS Welcome join probe");
-    println!("Scope: Alice/Bob setup, Alice group creation, add Bob, Bob joins from Welcome");
+    println!("CarbonStack OpenMLS two-message state-continuity probe");
+    println!("Scope: local two-member group, two app messages, provider state continuity inside one run");
     println!("Integration: none");
 
     let alice_provider = OpenMlsRustCrypto::default();
@@ -107,57 +107,58 @@ fn main() {
         "Bob group should have exactly two members after joining"
     );
 
-    let plaintext = b"hello from Alice over OpenMLS scratch";
+    let message_one = b"message one: hello from Alice over OpenMLS scratch";
 
-    let app_message_out = alice_group
-        .create_message(&alice_provider, &alice.signer, plaintext)
-        .expect("failed to create Alice application message");
-
-    println!("Alice created application message");
-
-    let app_message_bytes = app_message_out
-        .to_bytes()
-        .expect("failed to serialize Alice application message");
-
-    let app_message_in = MlsMessageIn::tls_deserialize_exact_bytes(&app_message_bytes)
-        .expect("failed to deserialize Alice application message as MlsMessageIn");
-
-    let protocol_message = app_message_in
-        .try_into_protocol_message()
-        .expect("failed to convert MlsMessageIn into ProtocolMessage");
-
-    println!("Application message converted to ProtocolMessage");
-    println!("Protocol message epoch: {:?}", protocol_message.epoch());
-    println!("Protocol message content type: {:?}", protocol_message.content_type());
-
-    let processed_message = bob_group
-        .process_message(&bob_provider, protocol_message)
-        .expect("Bob failed to process Alice application message");
-
-    println!("Bob processed application message");
-    println!("Processed message epoch: {:?}", processed_message.epoch());
-    println!("Processed message sender: {:?}", processed_message.sender());
-
-    let opened_plaintext = match processed_message.into_content() {
-        ProcessedMessageContent::ApplicationMessage(application_message) => {
-            application_message.into_bytes()
-        }
-        other => panic!("expected application message content, got: {:?}", other),
-    };
+    let opened_one = send_from_alice_to_bob(
+        &alice_provider,
+        &bob_provider,
+        &alice.signer,
+        &mut alice_group,
+        &mut bob_group,
+        message_one,
+    );
 
     assert_eq!(
-        opened_plaintext,
-        plaintext,
-        "Bob-opened plaintext should match Alice plaintext"
+        opened_one,
+        message_one,
+        "Bob-opened first plaintext should match Alice plaintext"
     );
 
     println!(
-        "Bob opened application plaintext: {}",
-        String::from_utf8_lossy(&opened_plaintext)
+        "Bob opened message one: {}",
+        String::from_utf8_lossy(&opened_one)
     );
 
-    println!("OpenMLS application message probe succeeded");
-    println!("Next rung: document scratch result and plan provider-boundary mapping");
+    println!("State continuity checkpoint:");
+    println!("Alice epoch after message one: {:?}", alice_group.epoch());
+    println!("Bob epoch after message one: {:?}", bob_group.epoch());
+    println!("Bob member count after message one: {}", bob_group.members().count());
+
+    let message_two = b"message two: state continuity check after processing message one";
+
+    let opened_two = send_from_alice_to_bob(
+        &alice_provider,
+        &bob_provider,
+        &alice.signer,
+        &mut alice_group,
+        &mut bob_group,
+        message_two,
+    );
+
+    assert_eq!(
+        opened_two,
+        message_two,
+        "Bob-opened second plaintext should match Alice plaintext"
+    );
+
+    println!(
+        "Bob opened message two: {}",
+        String::from_utf8_lossy(&opened_two)
+    );
+
+    println!("OpenMLS two-message state-continuity probe succeeded");
+    println!("Persistence conclusion: in-memory provider/group state remained usable across sequential messages inside one process.");
+    println!("Next rung: identify real provider storage/export strategy for process restart.");
 }
 
 fn make_device_setup(
@@ -206,5 +207,48 @@ fn make_device_setup(
     }
 }
 
+fn send_from_alice_to_bob(
+    alice_provider: &OpenMlsRustCrypto,
+    bob_provider: &OpenMlsRustCrypto,
+    alice_signer: &SignatureKeyPair,
+    alice_group: &mut MlsGroup,
+    bob_group: &mut MlsGroup,
+    plaintext: &[u8],
+) -> Vec<u8> {
+    let app_message_out = alice_group
+        .create_message(alice_provider, alice_signer, plaintext)
+        .expect("failed to create Alice application message");
 
+    println!("Alice created application message");
+
+    let app_message_bytes = app_message_out
+        .to_bytes()
+        .expect("failed to serialize Alice application message");
+
+    let app_message_in = MlsMessageIn::tls_deserialize_exact_bytes(&app_message_bytes)
+        .expect("failed to deserialize Alice application message as MlsMessageIn");
+
+    let protocol_message = app_message_in
+        .try_into_protocol_message()
+        .expect("failed to convert MlsMessageIn into ProtocolMessage");
+
+    println!("Application message converted to ProtocolMessage");
+    println!("Protocol message epoch: {:?}", protocol_message.epoch());
+    println!("Protocol message content type: {:?}", protocol_message.content_type());
+
+    let processed_message = bob_group
+        .process_message(bob_provider, protocol_message)
+        .expect("Bob failed to process Alice application message");
+
+    println!("Bob processed application message");
+    println!("Processed message epoch: {:?}", processed_message.epoch());
+    println!("Processed message sender: {:?}", processed_message.sender());
+
+    match processed_message.into_content() {
+        ProcessedMessageContent::ApplicationMessage(application_message) => {
+            application_message.into_bytes()
+        }
+        other => panic!("expected application message content, got: {:?}", other),
+    }
+}
 

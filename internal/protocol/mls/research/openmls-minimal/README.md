@@ -143,3 +143,24 @@ Before committing Rust scratch work, run from `carbonstack-comms`:
 
 Neither output should contain `target/`, `.exe`, `.pdb`, `.fingerprint`, or `.o`.
 
+
+## State Continuity Probe
+
+The scratch crate now sends two sequential Alice-to-Bob application messages inside one process.
+
+This validates:
+
+- Alice/Bob group state remains usable after one application message.
+- Bob's mutable group state can process a second message.
+- Message processing is stateful and must be treated as a persistence-relevant operation.
+
+This does not validate:
+
+- disk persistence
+- process restart recovery
+- provider-state export/import
+- secure vault storage
+- CarbonStackComms integration
+
+Next persistence work should identify the real OpenMLS provider storage/export strategy.
+
