@@ -4,77 +4,77 @@
 
 Classification: EXPERIMENTAL / RUST-ONLY / NOT INTEGRATED
 
-This directory is reserved for the first local-only OpenMLS scratch experiment.
+This directory contains the first local Rust scratch crate for CarbonStack's OpenMLS feasibility work.
 
-It intentionally does not yet contain:
+This is not a production provider.
 
-- Cargo.toml
-- Rust source
-- OpenMLS dependency
-- mls-rs dependency
+This is not wired into CarbonStackComms.
+
+This is not real CarbonStack messaging.
+
+## Current Stage
+
+Current stage:
+
+- dependency/build probe
+
+This stage proves only:
+
+- Rust is installed
+- Cargo works
+- OpenMLS-related crates can be added
+- dependencies can compile on the local Windows/MSVC setup
+- the scratch crate can run
+
+## Current Dependencies
+
+Intended probe dependencies:
+
+- openmls
+- openmls_rust_crypto
+- openmls_basic_credential
+
+## Not Yet Implemented
+
+Not yet implemented:
+
+- Alice identity creation
+- Bob identity creation
+- KeyPackage creation
+- MLS group creation
+- Bob join from Welcome
+- application message protection
+- application message opening
+- epoch inspection
+- membership inspection
+- state export/import
+- provider boundary mapping
 - Go integration
 - CarbonStackComms CLI integration
 
-## Purpose
+## Guardrails
 
-The purpose of this experiment is to learn whether OpenMLS can fit CarbonStack's provider boundary and trust model.
-
-The first experiment should be Rust-only.
-
-Do not solve Go/Rust integration here yet.
-
-## Intended Minimal Flow
-
-The first eventual code should prove:
-
-1. Alice credential/identity exists.
-2. Bob credential/identity exists.
-3. Bob public setup material / KeyPackage exists.
-4. Alice creates an MLS group.
-5. Alice adds Bob.
-6. Bob joins from Welcome / staged Welcome.
-7. Alice protects application text.
-8. Bob opens application text.
-9. Plaintext matches.
-10. Epoch or group state version can be inspected.
-11. Membership can be inspected or inferred.
-12. Persistence requirements are understood.
-
-## Integration Guardrail
-
-This experiment must not be wired into:
+Do not wire this crate into:
 
 - comms send
 - comms inbox
 - CarbonStackCypher
-- production state
 - trust.json
 - trust-events.jsonl
 - Android
 - CarbonStackOS
 
-## Mapping Target
-
-If the experiment works, map its concepts back to:
-
-- ProviderIdentity
-- PublicBundle
-- PublicVerification
-- ConversationState
-- ConversationEpoch
-- ProtectedMessage
-- OpenedMessage
-- ProviderEvent
-
 ## Allowed Claims
 
 Allowed:
 
-- CarbonStackComms has a reserved Rust-only OpenMLS scratch experiment path.
+- CarbonStackComms has a Rust-only OpenMLS scratch crate.
+- The scratch crate can test whether OpenMLS dependencies resolve and compile.
 
 Not allowed:
 
-- CarbonStackComms uses OpenMLS.
-- CarbonStackComms has MLS encryption.
-- CarbonStackComms has real E2EE.
-- CarbonStackComms has a production MLS provider.
+- CarbonStackComms uses OpenMLS for messaging.
+- CarbonStack has MLS encryption.
+- CarbonStack has real E2EE.
+- CarbonStack has selected a final MLS implementation.
+- CarbonStack has production secure messaging.
