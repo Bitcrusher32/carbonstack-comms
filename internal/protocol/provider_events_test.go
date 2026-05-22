@@ -1,0 +1,87 @@
+package protocol
+
+import "testing"
+
+func TestDescribeProviderEventFixtureEvents(t *testing.T) {
+	started := DescribeProviderEvent(ProviderEventFixtureStarted)
+	if started.Class != ProviderEventClassLifecycle {
+		t.Fatalf("fixture started class = %q, want %q", started.Class, ProviderEventClassLifecycle)
+	}
+	if started.Severity != ProviderEventSeverityDebug {
+		t.Fatalf("fixture started severity = %q, want %q", started.Severity, ProviderEventSeverityDebug)
+	}
+	if started.TrustRelevant {
+		t.Fatal("fixture started should not be trust relevant")
+	}
+}
+
+func TestDescribeProviderEventFixtureStreamNames(t *testing.T) {
+	fixtureEvents := []ProviderEventName{
+		ProviderEventFixtureStarted,
+		ProviderEventPublicBundleCreated,
+		ProviderEventConversationCreated,
+		ProviderEventConversationWelcomeCreated,
+		ProviderEventConversationMemberAdded,
+		ProviderEventConversationWelcomeStaged,
+		ProviderEventConversationJoined,
+		ProviderEventMessageProtected,
+		ProviderEventMessageOpened,
+		ProviderEventConversationLoaded,
+		ProviderEventFixtureCompleted,
+	}
+
+	for _, event := range fixtureEvents {
+		descriptor := DescribeProviderEvent(event)
+		if descriptor.Class == ProviderEventClassUnknown {
+			t.Fatalf("fixture event %q mapped to unknown class", event)
+		}
+	}
+}
+
+func TestDescribeProviderEventInvalidSignature(t *testing.T) {
+	descriptor := DescribeProviderEvent(ProviderEventSignatureInvalid)
+
+	if descriptor.Class != ProviderEventClassTrustSecurity {
+		t.Fatalf("invalid signature class = %q, want %q", descriptor.Class, ProviderEventClassTrustSecurity)
+	}
+
+	if descriptor.Severity != ProviderEventSeveritySecurity {
+		t.Fatalf("invalid signature severity = %q, want %q", descriptor.Severity, ProviderEventSeveritySecurity)
+	}
+
+	if !descriptor.TrustRelevant {
+		t.Fatal("invalid signature must be trust relevant")
+	}
+}
+
+func TestDescribeProviderEventFatal(t *testing.T) {
+	descriptor := DescribeProviderEvent(ProviderEventInvariantViolation)
+
+	if descriptor.Class != ProviderEventClassTerminalFatal {
+		t.Fatalf("fatal event class = %q, want %q", descriptor.Class, ProviderEventClassTerminalFatal)
+	}
+
+	if descriptor.Severity != ProviderEventSeverityFatal {
+		t.Fatalf("fatal event severity = %q, want %q", descriptor.Severity, ProviderEventSeverityFatal)
+	}
+
+	if !descriptor.TrustRelevant {
+		t.Fatal("fatal provider events should be trust/security relevant")
+	}
+}
+
+func TestDescribeProviderEventUnknown(t *testing.T) {
+	descriptor := DescribeProviderEvent(ProviderEventName("provider.future.event"))
+
+	if descriptor.Class != ProviderEventClassUnknown {
+		t.Fatalf("unknown event class = %q, want %q", descriptor.Class, ProviderEventClassUnknown)
+	}
+
+	if descriptor.Severity != ProviderEventSeverityWarning {
+		t.Fatalf("unknown event severity = %q, want %q", descriptor.Severity, ProviderEventSeverityWarning)
+	}
+
+	if descriptor.TrustRelevant {
+		t.Fatal("unknown events should not become trust relevant automatically")
+	}
+}
