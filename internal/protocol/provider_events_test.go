@@ -204,3 +204,22 @@ func TestDescribeProviderEventCheckpointFailed(t *testing.T) {
 		t.Fatal("checkpoint failed should not be trust relevant by default at this rung")
 	}
 }
+func TestDescribeProviderEventIdentityCreated(t *testing.T) {
+	descriptor := DescribeProviderEvent(ProviderEventIdentityCreated)
+
+	if descriptor.Name != ProviderEventIdentityCreated {
+		t.Fatalf("identity created event name = %q, want %q", descriptor.Name, ProviderEventIdentityCreated)
+	}
+
+	if descriptor.Class != ProviderEventClassStorageCheckpoint {
+		t.Fatalf("identity created class = %q, want %q", descriptor.Class, ProviderEventClassStorageCheckpoint)
+	}
+
+	if descriptor.Severity != ProviderEventSeverityInfo {
+		t.Fatalf("identity created severity = %q, want %q", descriptor.Severity, ProviderEventSeverityInfo)
+	}
+
+	if descriptor.TrustRelevant {
+		t.Fatal("identity created should not be trust relevant")
+	}
+}

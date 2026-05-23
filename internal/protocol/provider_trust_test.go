@@ -309,3 +309,29 @@ func TestDecideProviderTrustCheckpointFailed(t *testing.T) {
 		t.Fatal("checkpoint failed descriptor should not be cryptographic trust relevant by default")
 	}
 }
+func TestDecideProviderTrustIdentityCreated(t *testing.T) {
+	decision := DecideProviderTrust(ProviderEventIdentityCreated)
+
+	assertHasAction(t, decision, ProviderTrustActionAppendHistory)
+	assertHasAction(t, decision, ProviderTrustActionDebugOnly)
+
+	if decision.BlocksSend || decision.BlocksReceive || decision.BlocksOpen {
+		t.Fatal("identity created should not block send, receive, or open")
+	}
+
+	if decision.RequiresReverify {
+		t.Fatal("identity created should not require reverify")
+	}
+
+	if decision.UserVisible {
+		t.Fatal("identity created should not be user visible")
+	}
+
+	if !decision.HistoryRelevant {
+		t.Fatal("identity created should be history relevant")
+	}
+
+	if decision.Descriptor.TrustRelevant {
+		t.Fatal("identity created descriptor should not be trust relevant")
+	}
+}

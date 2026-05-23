@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -26,16 +27,23 @@ type openMLSSidecarEnvelope struct {
 }
 
 type openMLSSidecarProviderData struct {
-	Capabilities           []string `json:"capabilities"`
-	Unsupported            []string `json:"unsupported"`
-	SecurityLevel          string   `json:"security_level"`
-	DeviceLabel            string   `json:"device_label"`
-	IdentityCreated        bool     `json:"identity_created"`
-	StateWritten           bool     `json:"state_written"`
-	StateScope             string   `json:"state_scope"`
-	StatePathHint          string   `json:"state_path_hint"`
-	ManifestPathHint       string   `json:"manifest_path_hint"`
-	ProviderStorageWritten bool     `json:"provider_storage_written"`
+	Capabilities            []string `json:"capabilities"`
+	Unsupported             []string `json:"unsupported"`
+	SecurityLevel           string   `json:"security_level"`
+	DeviceLabel             string   `json:"device_label"`
+	IdentityCreated         bool     `json:"identity_created"`
+	StateWritten            bool     `json:"state_written"`
+	StateScope              string   `json:"state_scope"`
+	StatePathHint           string   `json:"state_path_hint"`
+	PrepManifestPathHint    string   `json:"prep_manifest_path_hint"`
+	IdentitySummaryPathHint string   `json:"identity_summary_path_hint"`
+	IdentityStatePathHint   string   `json:"identity_state_path_hint"`
+	SignerPathHint          string   `json:"signer_path_hint"`
+	PublicIdentityRef       string   `json:"public_identity_ref"`
+	PublicSignatureKeyLen   int      `json:"public_signature_key_len"`
+	ManifestPathHint        string   `json:"manifest_path_hint"`
+	ProviderStorageWritten  bool     `json:"provider_storage_written"`
+	PublicBundleAvailable   bool     `json:"public_bundle_available"`
 }
 
 type openMLSSidecarError struct {
@@ -183,84 +191,174 @@ func TestOpenMLSSidecarIdentityCreateInvalidLabel(t *testing.T) {
 	}
 }
 
-func TestOpenMLSSidecarIdentityCreateWritesPrepState(t *testing.T) {
+func TestOpenMLSSidecarIdentityCreateWritesDevIdentityState(t *testing.T) {
 	removeOpenMLSSidecarState(t)
 
 	output, err := runOpenMLSSidecar("identity-create", "--device-label", "carbonstack-alice-device")
 	if err != nil {
-		t.Fatalf("identity-create prep state should exit 0: %v\noutput:\n%s", err, string(output))
+		t.Fatalf("identity-create dev state should exit 0: %v\noutput:\n%s", err, string(output))
 	}
 
 	envelope := parseSidecarEnvelope(t, output)
 
 	if !envelope.OK {
-		t.Fatal("identity-create prep state envelope ok = false, want true")
+		t.Fatal("identity-create dev state envelope ok = false, want true")
 	}
 
 	if envelope.Data.DeviceLabel != "carbonstack-alice-device" {
 		t.Fatalf("device label = %q, want carbonstack-alice-device", envelope.Data.DeviceLabel)
 	}
 
-	if envelope.Data.IdentityCreated {
-		t.Fatal("identity-create state skeleton must not create identity material yet")
+	if !envelope.Data.IdentityCreated {
+		t.Fatal("identity-create should report identity_created=true")
 	}
 
 	if !envelope.Data.StateWritten {
-		t.Fatal("identity-create state skeleton should write prep state")
+		t.Fatal("identity-create should report state_written=true")
 	}
 
 	if envelope.Data.ProviderStorageWritten {
-		t.Fatal("identity-create state skeleton must not write provider storage")
+		t.Fatal("identity-create must not claim provider storage was written")
+	}
+
+	if envelope.Data.PublicBundleAvailable {
+		t.Fatal("identity-create must not claim public bundle is available")
 	}
 
 	if envelope.PrivateMaterialIncluded {
-		t.Fatal("identity-create state skeleton must not include private material")
+		t.Fatal("identity-create must not include private material")
 	}
 
-	if envelope.Data.ManifestPathHint == "" {
-		t.Fatal("expected manifest path hint")
+	if envelope.Data.PublicIdentityRef == "" {
+		t.Fatal("expected public identity ref")
 	}
 
-	manifestPath := filepath.Join(openMLSSidecarDir, ".carbonstack-openmls-sidecar-state", "dev", "devices", "carbonstack-alice-device", "identity-prep.json")
-	manifestBytes, err := os.ReadFile(filepath.Clean(manifestPath))
-	if err != nil {
-		t.Fatalf("read prep manifest: %v", err)
+	if !strings.HasPrefix(envelope.Data.PublicIdentityRef, "sha256:") {
+		t.Fatalf("public identity ref = %q, want sha256 prefix", envelope.Data.PublicIdentityRef)
 	}
 
-	if !json.Valid(manifestBytes) {
-		t.Fatalf("prep manifest is not valid JSON:\n%s", string(manifestBytes))
+	if envelope.Data.PublicSignatureKeyLen <= 0 {
+		t.Fatalf("public signature key length = %d, want positive", envelope.Data.PublicSignatureKeyLen)
 	}
 
-	var manifest struct {
-		ManifestVersion         string `json:"manifest_version"`
+	if len(envelope.Events) != 1 {
+		t.Fatalf("identity-create event count = %d, want 1", len(envelope.Events))
+	}
+
+	if envelope.Events[0].Event != string(ProviderEventIdentityCreated) {
+		t.Fatalf("identity-create event = %q, want %q", envelope.Events[0].Event, ProviderEventIdentityCreated)
+	}
+
+	if envelope.Events[0].TrustRelevant {
+		t.Fatal("identity-created event should not be trust relevant")
+	}
+
+	assertNoSecretMaterialInStdout(t, output)
+
+	stateDir := filepath.Join(openMLSSidecarDir, ".carbonstack-openmls-sidecar-state", "dev", "devices", "carbonstack-alice-device")
+	prepManifestPath := filepath.Join(stateDir, "identity-prep.json")
+	identitySummaryPath := filepath.Join(stateDir, "identity-summary.json")
+	identityStatePath := filepath.Join(stateDir, "identity-state.json")
+	signerPath := filepath.Join(stateDir, "signer.json")
+
+	assertFileExists(t, prepManifestPath)
+	assertFileExists(t, identitySummaryPath)
+	assertFileExists(t, identityStatePath)
+	assertFileExists(t, signerPath)
+
+	var summary struct {
+		SummaryVersion          string `json:"summary_version"`
 		DeviceLabel             string `json:"device_label"`
 		IdentityCreated         bool   `json:"identity_created"`
+		PublicIdentityRef       string `json:"public_identity_ref"`
+		PublicSignatureKeyLen   int    `json:"public_signature_key_len"`
+		KeyPackageCreated       bool   `json:"key_package_created"`
+		PublicBundleAvailable   bool   `json:"public_bundle_available"`
 		ProviderStorageWritten  bool   `json:"provider_storage_written"`
 		PrivateMaterialIncluded bool   `json:"private_material_included"`
 	}
 
-	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
-		t.Fatalf("parse prep manifest: %v", err)
+	readJSONFile(t, identitySummaryPath, &summary)
+
+	if summary.SummaryVersion != "identity-summary/v0" {
+		t.Fatalf("summary version = %q, want identity-summary/v0", summary.SummaryVersion)
 	}
 
-	if manifest.ManifestVersion != "identity-prep/v0" {
-		t.Fatalf("manifest version = %q, want identity-prep/v0", manifest.ManifestVersion)
+	if summary.DeviceLabel != "carbonstack-alice-device" {
+		t.Fatalf("summary device label = %q, want carbonstack-alice-device", summary.DeviceLabel)
 	}
 
-	if manifest.DeviceLabel != "carbonstack-alice-device" {
-		t.Fatalf("manifest device label = %q, want carbonstack-alice-device", manifest.DeviceLabel)
+	if !summary.IdentityCreated {
+		t.Fatal("summary should report identity_created=true")
 	}
 
-	if manifest.IdentityCreated {
-		t.Fatal("manifest must not claim identity was created")
+	if summary.PublicIdentityRef == "" || !strings.HasPrefix(summary.PublicIdentityRef, "sha256:") {
+		t.Fatalf("summary public identity ref = %q, want sha256 ref", summary.PublicIdentityRef)
 	}
 
-	if manifest.ProviderStorageWritten {
-		t.Fatal("manifest must not claim provider storage was written")
+	if summary.PublicSignatureKeyLen <= 0 {
+		t.Fatalf("summary public signature key length = %d, want positive", summary.PublicSignatureKeyLen)
 	}
 
-	if manifest.PrivateMaterialIncluded {
-		t.Fatal("manifest must not include private material")
+	if summary.KeyPackageCreated {
+		t.Fatal("summary must not claim KeyPackage was created")
+	}
+
+	if summary.PublicBundleAvailable {
+		t.Fatal("summary must not claim public bundle is available")
+	}
+
+	if summary.ProviderStorageWritten {
+		t.Fatal("summary must not claim provider storage was written")
+	}
+
+	if summary.PrivateMaterialIncluded {
+		t.Fatal("summary must not include private material")
+	}
+
+	var state struct {
+		StateVersion            string `json:"state_version"`
+		DeviceLabel             string `json:"device_label"`
+		IdentityCreated         bool   `json:"identity_created"`
+		SignerFile              string `json:"signer_file"`
+		ProviderStorageWritten  bool   `json:"provider_storage_written"`
+		KeyPackageCreated       bool   `json:"key_package_created"`
+		PublicBundleAvailable   bool   `json:"public_bundle_available"`
+		PrivateMaterialIncluded bool   `json:"private_material_included"`
+	}
+
+	readJSONFile(t, identityStatePath, &state)
+
+	if state.StateVersion != "identity-state/v0" {
+		t.Fatalf("state version = %q, want identity-state/v0", state.StateVersion)
+	}
+
+	if state.DeviceLabel != "carbonstack-alice-device" {
+		t.Fatalf("state device label = %q, want carbonstack-alice-device", state.DeviceLabel)
+	}
+
+	if !state.IdentityCreated {
+		t.Fatal("state should report identity_created=true")
+	}
+
+	if state.SignerFile != "signer.json" {
+		t.Fatalf("state signer file = %q, want signer.json", state.SignerFile)
+	}
+
+	if state.ProviderStorageWritten {
+		t.Fatal("state must not claim provider storage was written")
+	}
+
+	if state.KeyPackageCreated {
+		t.Fatal("state must not claim KeyPackage was created")
+	}
+
+	if state.PublicBundleAvailable {
+		t.Fatal("state must not claim public bundle is available")
+	}
+
+	if state.PrivateMaterialIncluded {
+		t.Fatal("state must not include private material")
 	}
 }
 
@@ -282,7 +380,7 @@ func TestOpenMLSSidecarIdentityCreateRefusesOverwrite(t *testing.T) {
 	}
 
 	assertProviderEnvelopeBase(t, envelope)
-	assertSidecarError(t, envelope, "identity_prep_state_already_exists", string(ProviderEventIdentityExists), "warning", false)
+	assertSidecarError(t, envelope, "identity_already_exists", string(ProviderEventIdentityExists), "warning", false)
 
 	if envelope.Data.StateWritten {
 		t.Fatal("overwrite refusal should not report state_written")
@@ -291,6 +389,8 @@ func TestOpenMLSSidecarIdentityCreateRefusesOverwrite(t *testing.T) {
 	if envelope.PrivateMaterialIncluded {
 		t.Fatal("overwrite refusal must not include private material")
 	}
+
+	assertNoSecretMaterialInStdout(t, secondOutput)
 }
 
 func runOpenMLSSidecar(args ...string) ([]byte, error) {
@@ -320,6 +420,40 @@ func parseSidecarEnvelope(t *testing.T, output []byte) openMLSSidecarEnvelope {
 	}
 
 	return envelope
+}
+
+func readJSONFile(t *testing.T, path string, target any) {
+	t.Helper()
+
+	bytes, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		t.Fatalf("read JSON file %s: %v", path, err)
+	}
+
+	if !json.Valid(bytes) {
+		t.Fatalf("file is not valid JSON %s:\n%s", path, string(bytes))
+	}
+
+	if err := json.Unmarshal(bytes, target); err != nil {
+		t.Fatalf("parse JSON file %s: %v", path, err)
+	}
+}
+
+func assertFileExists(t *testing.T, path string) {
+	t.Helper()
+
+	info, err := os.Stat(filepath.Clean(path))
+	if err != nil {
+		t.Fatalf("expected file %s: %v", path, err)
+	}
+
+	if info.IsDir() {
+		t.Fatalf("expected file %s, got directory", path)
+	}
+
+	if info.Size() == 0 {
+		t.Fatalf("expected file %s to be non-empty", path)
+	}
 }
 
 func assertExitCode(t *testing.T, err error, want int) {
@@ -376,6 +510,31 @@ func assertSidecarError(t *testing.T, envelope openMLSSidecarEnvelope, code stri
 
 	if envelope.Error.TrustRelevant != trustRelevant {
 		t.Fatalf("trust relevant = %v, want %v", envelope.Error.TrustRelevant, trustRelevant)
+	}
+}
+
+func assertNoSecretMaterialInStdout(t *testing.T, output []byte) {
+	t.Helper()
+
+	text := strings.ToLower(string(output))
+
+	for _, forbidden := range []string{
+		"private_key",
+		"privatekey",
+		"secret_key",
+		"secretkey",
+		"signing_key",
+		"signingkey",
+		"key_store",
+		"keystore",
+		"memory_storage",
+		"memorystorage",
+		"recovery",
+		"seed",
+	} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("stdout appears to contain forbidden secret-related token %q:\n%s", forbidden, string(output))
+		}
 	}
 }
 
