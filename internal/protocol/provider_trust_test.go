@@ -187,3 +187,50 @@ func TestDecideProviderTrustCommandUnsupported(t *testing.T) {
 		t.Fatal("unsupported command descriptor should not be trust relevant")
 	}
 }
+
+func TestDecideProviderTrustCommandInvalid(t *testing.T) {
+	decision := DecideProviderTrust(ProviderEventCommandInvalid)
+
+	assertCommandSurfaceDecision(t, decision, ProviderEventCommandInvalid)
+}
+
+func TestDecideProviderTrustCommandNotImplemented(t *testing.T) {
+	decision := DecideProviderTrust(ProviderEventCommandNotImplemented)
+
+	assertCommandSurfaceDecision(t, decision, ProviderEventCommandNotImplemented)
+}
+
+func assertCommandSurfaceDecision(t *testing.T, decision ProviderTrustDecision, event ProviderEventName) {
+	t.Helper()
+
+	if decision.Event != event {
+		t.Fatalf("decision event = %q, want %q", decision.Event, event)
+	}
+
+	assertHasAction(t, decision, ProviderTrustActionAppendHistory)
+	assertHasAction(t, decision, ProviderTrustActionDebugOnly)
+
+	if decision.BlocksSend || decision.BlocksReceive || decision.BlocksOpen {
+		t.Fatalf("%q should not block send, receive, or open", event)
+	}
+
+	if decision.RequiresReverify {
+		t.Fatalf("%q should not require reverify", event)
+	}
+
+	if decision.UserVisible {
+		t.Fatalf("%q should not be user visible", event)
+	}
+
+	if !decision.HistoryRelevant {
+		t.Fatalf("%q should be history relevant for developer/audit continuity", event)
+	}
+
+	if decision.Descriptor.Severity != ProviderEventSeverityWarning {
+		t.Fatalf("%q severity = %q, want %q", event, decision.Descriptor.Severity, ProviderEventSeverityWarning)
+	}
+
+	if decision.Descriptor.TrustRelevant {
+		t.Fatalf("%q descriptor should not be trust relevant", event)
+	}
+}

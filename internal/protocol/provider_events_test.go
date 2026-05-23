@@ -105,3 +105,43 @@ func TestDescribeProviderEventCommandUnsupported(t *testing.T) {
 		t.Fatal("unsupported command should not be trust relevant")
 	}
 }
+
+func TestDescribeProviderEventCommandInvalid(t *testing.T) {
+	descriptor := DescribeProviderEvent(ProviderEventCommandInvalid)
+
+	if descriptor.Name != ProviderEventCommandInvalid {
+		t.Fatalf("invalid command event name = %q, want %q", descriptor.Name, ProviderEventCommandInvalid)
+	}
+
+	if descriptor.Class != ProviderEventClassLifecycle {
+		t.Fatalf("invalid command class = %q, want %q", descriptor.Class, ProviderEventClassLifecycle)
+	}
+
+	if descriptor.Severity != ProviderEventSeverityWarning {
+		t.Fatalf("invalid command severity = %q, want %q", descriptor.Severity, ProviderEventSeverityWarning)
+	}
+
+	if descriptor.TrustRelevant {
+		t.Fatal("invalid command should not be trust relevant")
+	}
+}
+
+func TestDescribeProviderEventCommandNotImplemented(t *testing.T) {
+	descriptor := DescribeProviderEvent(ProviderEventCommandNotImplemented)
+
+	if descriptor.Name != ProviderEventCommandNotImplemented {
+		t.Fatalf("not-implemented command event name = %q, want %q", descriptor.Name, ProviderEventCommandNotImplemented)
+	}
+
+	if descriptor.Class != ProviderEventClassLifecycle {
+		t.Fatalf("not-implemented command class = %q, want %q", descriptor.Class, ProviderEventClassLifecycle)
+	}
+
+	if descriptor.Severity != ProviderEventSeverityWarning {
+		t.Fatalf("not-implemented command severity = %q, want %q", descriptor.Severity, ProviderEventSeverityWarning)
+	}
+
+	if descriptor.TrustRelevant {
+		t.Fatal("not-implemented command should not be trust relevant")
+	}
+}

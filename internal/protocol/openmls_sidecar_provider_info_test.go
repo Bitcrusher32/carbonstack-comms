@@ -148,7 +148,7 @@ func TestOpenMLSSidecarIdentityCreateMissingLabel(t *testing.T) {
 	}
 
 	assertProviderEnvelopeBase(t, envelope)
-	assertSidecarError(t, envelope, "missing_required_argument", "provider.command.invalid", "warning", false)
+	assertSidecarError(t, envelope, "missing_required_argument", string(ProviderEventCommandInvalid), "warning", false)
 
 	if envelope.PrivateMaterialIncluded {
 		t.Fatal("missing-label identity-create must not include private material")
@@ -170,7 +170,7 @@ func TestOpenMLSSidecarIdentityCreateInvalidLabel(t *testing.T) {
 	}
 
 	assertProviderEnvelopeBase(t, envelope)
-	assertSidecarError(t, envelope, "invalid_device_label", "provider.command.invalid", "warning", false)
+	assertSidecarError(t, envelope, "invalid_device_label", string(ProviderEventCommandInvalid), "warning", false)
 
 	if envelope.PrivateMaterialIncluded {
 		t.Fatal("invalid-label identity-create must not include private material")
@@ -200,7 +200,7 @@ func TestOpenMLSSidecarIdentityCreateSafeLabelNotImplemented(t *testing.T) {
 	}
 
 	assertProviderEnvelopeBase(t, envelope)
-	assertSidecarError(t, envelope, "not_implemented", "provider.command.not_implemented", "warning", false)
+	assertSidecarError(t, envelope, "not_implemented", string(ProviderEventCommandNotImplemented), "warning", false)
 
 	if envelope.PrivateMaterialIncluded {
 		t.Fatal("not-implemented identity-create must not include private material")
