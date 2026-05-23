@@ -35,8 +35,9 @@ const (
 type ProviderEventName string
 
 const (
-	ProviderEventFixtureStarted   ProviderEventName = "provider.fixture.started"
-	ProviderEventFixtureCompleted ProviderEventName = "provider.fixture.completed"
+	ProviderEventFixtureStarted     ProviderEventName = "provider.fixture.started"
+	ProviderEventFixtureCompleted   ProviderEventName = "provider.fixture.completed"
+	ProviderEventCommandUnsupported ProviderEventName = "provider.command.unsupported"
 
 	ProviderEventPublicBundleCreated ProviderEventName = "provider.public_bundle.created"
 
@@ -93,6 +94,13 @@ func DescribeProviderEvent(name ProviderEventName) ProviderEventDescriptor {
 			Name:          name,
 			Class:         ProviderEventClassLifecycle,
 			Severity:      ProviderEventSeverityDebug,
+			TrustRelevant: false,
+		}
+	case ProviderEventCommandUnsupported:
+		return ProviderEventDescriptor{
+			Name:          name,
+			Class:         ProviderEventClassLifecycle,
+			Severity:      ProviderEventSeverityWarning,
 			TrustRelevant: false,
 		}
 

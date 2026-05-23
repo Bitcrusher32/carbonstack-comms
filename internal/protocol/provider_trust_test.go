@@ -156,3 +156,34 @@ func assertHasAction(t *testing.T, decision ProviderTrustDecision, action Provid
 		t.Fatalf("expected action %q for event %q, got %#v", action, decision.Event, decision.Actions)
 	}
 }
+
+func TestDecideProviderTrustCommandUnsupported(t *testing.T) {
+	decision := DecideProviderTrust(ProviderEventCommandUnsupported)
+
+	assertHasAction(t, decision, ProviderTrustActionAppendHistory)
+	assertHasAction(t, decision, ProviderTrustActionDebugOnly)
+
+	if decision.BlocksSend || decision.BlocksReceive || decision.BlocksOpen {
+		t.Fatal("unsupported command should not block send, receive, or open")
+	}
+
+	if decision.RequiresReverify {
+		t.Fatal("unsupported command should not require reverify")
+	}
+
+	if decision.UserVisible {
+		t.Fatal("unsupported command should not be user visible")
+	}
+
+	if !decision.HistoryRelevant {
+		t.Fatal("unsupported command should be history relevant for developer/audit continuity")
+	}
+
+	if decision.Descriptor.Severity != ProviderEventSeverityWarning {
+		t.Fatalf("unsupported command severity = %q, want %q", decision.Descriptor.Severity, ProviderEventSeverityWarning)
+	}
+
+	if decision.Descriptor.TrustRelevant {
+		t.Fatal("unsupported command descriptor should not be trust relevant")
+	}
+}

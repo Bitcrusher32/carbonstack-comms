@@ -140,7 +140,7 @@ func TestOpenMLSSidecarUnsupportedCommandEnvelope(t *testing.T) {
 		t.Fatalf("error code = %q, want unsupported_command", envelope.Error.Code)
 	}
 
-	if envelope.Error.ProviderEvent != "provider.command.unsupported" {
+	if envelope.Error.ProviderEvent != string(ProviderEventCommandUnsupported) {
 		t.Fatalf("provider event = %q, want provider.command.unsupported", envelope.Error.ProviderEvent)
 	}
 

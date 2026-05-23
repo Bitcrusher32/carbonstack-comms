@@ -85,3 +85,23 @@ func TestDescribeProviderEventUnknown(t *testing.T) {
 		t.Fatal("unknown events should not become trust relevant automatically")
 	}
 }
+
+func TestDescribeProviderEventCommandUnsupported(t *testing.T) {
+	descriptor := DescribeProviderEvent(ProviderEventCommandUnsupported)
+
+	if descriptor.Name != ProviderEventCommandUnsupported {
+		t.Fatalf("unsupported command event name = %q, want %q", descriptor.Name, ProviderEventCommandUnsupported)
+	}
+
+	if descriptor.Class != ProviderEventClassLifecycle {
+		t.Fatalf("unsupported command class = %q, want %q", descriptor.Class, ProviderEventClassLifecycle)
+	}
+
+	if descriptor.Severity != ProviderEventSeverityWarning {
+		t.Fatalf("unsupported command severity = %q, want %q", descriptor.Severity, ProviderEventSeverityWarning)
+	}
+
+	if descriptor.TrustRelevant {
+		t.Fatal("unsupported command should not be trust relevant")
+	}
+}
