@@ -223,3 +223,42 @@ func TestDescribeProviderEventIdentityCreated(t *testing.T) {
 		t.Fatal("identity created should not be trust relevant")
 	}
 }
+func TestDescribeProviderEventIdentityLoaded(t *testing.T) {
+	descriptor := DescribeProviderEvent(ProviderEventIdentityLoaded)
+
+	if descriptor.Name != ProviderEventIdentityLoaded {
+		t.Fatalf("identity loaded event name = %q, want %q", descriptor.Name, ProviderEventIdentityLoaded)
+	}
+
+	if descriptor.Class != ProviderEventClassStorageCheckpoint {
+		t.Fatalf("identity loaded class = %q, want %q", descriptor.Class, ProviderEventClassStorageCheckpoint)
+	}
+
+	if descriptor.Severity != ProviderEventSeverityInfo {
+		t.Fatalf("identity loaded severity = %q, want %q", descriptor.Severity, ProviderEventSeverityInfo)
+	}
+
+	if descriptor.TrustRelevant {
+		t.Fatal("identity loaded should not be trust relevant")
+	}
+}
+
+func TestDescribeProviderEventIdentityMissing(t *testing.T) {
+	descriptor := DescribeProviderEvent(ProviderEventIdentityMissing)
+
+	if descriptor.Name != ProviderEventIdentityMissing {
+		t.Fatalf("identity missing event name = %q, want %q", descriptor.Name, ProviderEventIdentityMissing)
+	}
+
+	if descriptor.Class != ProviderEventClassStorageCheckpoint {
+		t.Fatalf("identity missing class = %q, want %q", descriptor.Class, ProviderEventClassStorageCheckpoint)
+	}
+
+	if descriptor.Severity != ProviderEventSeverityWarning {
+		t.Fatalf("identity missing severity = %q, want %q", descriptor.Severity, ProviderEventSeverityWarning)
+	}
+
+	if descriptor.TrustRelevant {
+		t.Fatal("identity missing should not be trust relevant by default")
+	}
+}

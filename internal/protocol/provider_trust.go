@@ -171,6 +171,14 @@ func DecideProviderTrust(name ProviderEventName) ProviderTrustDecision {
 		decision.BlocksOpen = true
 		decision.UserVisible = true
 		decision.HistoryRelevant = true
+	case ProviderEventIdentityMissing:
+		decision.Actions = []ProviderTrustAction{
+			ProviderTrustActionStopOperation,
+			ProviderTrustActionShowRecoveryPath,
+			ProviderTrustActionAppendHistory,
+		}
+		decision.BlocksSend = true
+		decision.HistoryRelevant = true
 
 	default:
 		decision.Actions = []ProviderTrustAction{

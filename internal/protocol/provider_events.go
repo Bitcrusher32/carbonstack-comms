@@ -42,6 +42,8 @@ const (
 	ProviderEventCommandNotImplemented    ProviderEventName = "provider.command.not_implemented"
 	ProviderEventIdentityPrepStateWritten ProviderEventName = "provider.identity.prep_state_written"
 	ProviderEventIdentityCreated          ProviderEventName = "provider.identity.created"
+	ProviderEventIdentityLoaded           ProviderEventName = "provider.identity.loaded"
+	ProviderEventIdentityMissing          ProviderEventName = "provider.identity.missing"
 	ProviderEventIdentityExists           ProviderEventName = "provider.identity.exists"
 	ProviderEventCheckpointFailed         ProviderEventName = "checkpoint.failed"
 	ProviderEventPublicBundleCreated      ProviderEventName = "provider.public_bundle.created"
@@ -111,6 +113,21 @@ func DescribeProviderEvent(name ProviderEventName) ProviderEventDescriptor {
 		return ProviderEventDescriptor{
 			Name:          name,
 			Class:         ProviderEventClassLifecycle,
+			Severity:      ProviderEventSeverityWarning,
+			TrustRelevant: false,
+		}
+	case ProviderEventIdentityLoaded:
+		return ProviderEventDescriptor{
+			Name:          name,
+			Class:         ProviderEventClassStorageCheckpoint,
+			Severity:      ProviderEventSeverityInfo,
+			TrustRelevant: false,
+		}
+
+	case ProviderEventIdentityMissing:
+		return ProviderEventDescriptor{
+			Name:          name,
+			Class:         ProviderEventClassStorageCheckpoint,
 			Severity:      ProviderEventSeverityWarning,
 			TrustRelevant: false,
 		}

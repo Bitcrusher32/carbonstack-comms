@@ -335,3 +335,53 @@ func TestDecideProviderTrustIdentityCreated(t *testing.T) {
 		t.Fatal("identity created descriptor should not be trust relevant")
 	}
 }
+func TestDecideProviderTrustIdentityLoaded(t *testing.T) {
+	decision := DecideProviderTrust(ProviderEventIdentityLoaded)
+
+	assertHasAction(t, decision, ProviderTrustActionAppendHistory)
+	assertHasAction(t, decision, ProviderTrustActionDebugOnly)
+
+	if decision.BlocksSend || decision.BlocksReceive || decision.BlocksOpen {
+		t.Fatal("identity loaded should not block send, receive, or open")
+	}
+
+	if decision.RequiresReverify {
+		t.Fatal("identity loaded should not require reverify")
+	}
+
+	if decision.UserVisible {
+		t.Fatal("identity loaded should not be user visible")
+	}
+
+	if !decision.HistoryRelevant {
+		t.Fatal("identity loaded should be history relevant")
+	}
+
+	if decision.Descriptor.TrustRelevant {
+		t.Fatal("identity loaded descriptor should not be trust relevant")
+	}
+}
+
+func TestDecideProviderTrustIdentityMissing(t *testing.T) {
+	decision := DecideProviderTrust(ProviderEventIdentityMissing)
+
+	assertHasAction(t, decision, ProviderTrustActionStopOperation)
+	assertHasAction(t, decision, ProviderTrustActionShowRecoveryPath)
+	assertHasAction(t, decision, ProviderTrustActionAppendHistory)
+
+	if !decision.BlocksSend {
+		t.Fatal("identity missing should block current identity-dependent send/outgoing operation")
+	}
+
+	if decision.RequiresReverify {
+		t.Fatal("identity missing should not require reverify by default")
+	}
+
+	if !decision.HistoryRelevant {
+		t.Fatal("identity missing should be history relevant")
+	}
+
+	if decision.Descriptor.TrustRelevant {
+		t.Fatal("identity missing descriptor should not be cryptographic trust relevant by default")
+	}
+}

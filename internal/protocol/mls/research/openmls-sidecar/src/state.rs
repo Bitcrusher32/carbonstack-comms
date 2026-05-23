@@ -1,6 +1,6 @@
 use openmls::prelude::*;
 use openmls_basic_credential::SignatureKeyPair;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs::{self, File};
 use std::io;
@@ -63,6 +63,22 @@ struct IdentityState<'a> {
     warning: &'a str,
 }
 
+#[derive(Deserialize)]
+struct IdentitySummaryRead {
+    device_label: String,
+    identity_created: bool,
+    public_identity_ref: String,
+    provider_storage_written: bool,
+    public_bundle_available: bool,
+}
+
+#[derive(Deserialize)]
+struct IdentityStateRead {
+    device_label: String,
+    identity_created: bool,
+    provider_storage_written: bool,
+    public_bundle_available: bool,
+}
 pub fn device_state_dir(device_label: &str) -> PathBuf {
     Path::new(STATE_ROOT)
         .join(DEV_SCOPE)
@@ -187,6 +203,103 @@ pub fn create_dev_identity(device_label: &str) -> io::Result<IdentityCreateResul
     })
 }
 
+#[derive(Debug, Clone)]
+pub struct IdentityStatusResult {
+    pub device_label: String,
+    pub state_dir: PathBuf,
+    pub identity_summary_path: PathBuf,
+    pub identity_state_path: PathBuf,
+    pub signer_path: PathBuf,
+    pub public_identity_ref: String,
+    pub public_signature_key_len: usize,
+    pub identity_created: bool,
+    pub provider_storage_written: bool,
+    pub public_bundle_available: bool,
+}
+
+pub fn load_dev_identity_status(device_label: &str) -> io::Result<IdentityStatusResult> {
+    let state_dir = device_state_dir(device_label);
+    let identity_summary_path = identity_summary_path(device_label);
+    let identity_state_path = identity_state_path(device_label);
+    let signer_path = signer_path(device_label);
+
+    if !state_dir.exists()
+        || !identity_summary_path.exists()
+        || !identity_state_path.exists()
+        || !signer_path.exists()
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "identity state is missing",
+        ));
+    }
+
+    let signer: SignatureKeyPair = read_json_file(&signer_path).map_err(|err| {
+        io::Error::new(io::ErrorKind::Other, format!("signer load failed: {err}"))
+    })?;
+
+    let summary: IdentitySummaryRead = read_json_file(&identity_summary_path).map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("identity summary load failed: {err}"),
+        )
+    })?;
+
+    let state: IdentityStateRead = read_json_file(&identity_state_path).map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("identity state load failed: {err}"),
+        )
+    })?;
+
+    let public_signature_key = signer.to_public_vec();
+    let computed_public_identity_ref = public_identity_ref(&public_signature_key);
+
+    if summary.public_identity_ref != computed_public_identity_ref {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "identity summary public reference does not match signer",
+        ));
+    }
+
+    if summary.device_label != device_label || state.device_label != device_label {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "identity state device label mismatch",
+        ));
+    }
+
+    if !summary.identity_created || !state.identity_created {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "identity state does not report identity_created",
+        ));
+    }
+
+    Ok(IdentityStatusResult {
+        device_label: device_label.to_string(),
+        state_dir,
+        identity_summary_path,
+        identity_state_path,
+        signer_path,
+        public_identity_ref: computed_public_identity_ref,
+        public_signature_key_len: public_signature_key.len(),
+        identity_created: true,
+        provider_storage_written: summary.provider_storage_written
+            || state.provider_storage_written,
+        public_bundle_available: summary.public_bundle_available || state.public_bundle_available,
+    })
+}
+
+fn read_json_file<T: for<'de> Deserialize<'de>>(path: &Path) -> io::Result<T> {
+    let file = File::open(path)?;
+    serde_json::from_reader(file).map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("json read failed: {err}"),
+        )
+    })
+}
 fn public_identity_ref(public_signature_key: &[u8]) -> String {
     let digest = Sha256::digest(public_signature_key);
     format!("sha256:{}", hex::encode(digest))

@@ -27,23 +27,27 @@ type openMLSSidecarEnvelope struct {
 }
 
 type openMLSSidecarProviderData struct {
-	Capabilities            []string `json:"capabilities"`
-	Unsupported             []string `json:"unsupported"`
-	SecurityLevel           string   `json:"security_level"`
-	DeviceLabel             string   `json:"device_label"`
-	IdentityCreated         bool     `json:"identity_created"`
-	StateWritten            bool     `json:"state_written"`
-	StateScope              string   `json:"state_scope"`
-	StatePathHint           string   `json:"state_path_hint"`
-	PrepManifestPathHint    string   `json:"prep_manifest_path_hint"`
-	IdentitySummaryPathHint string   `json:"identity_summary_path_hint"`
-	IdentityStatePathHint   string   `json:"identity_state_path_hint"`
-	SignerPathHint          string   `json:"signer_path_hint"`
-	PublicIdentityRef       string   `json:"public_identity_ref"`
-	PublicSignatureKeyLen   int      `json:"public_signature_key_len"`
-	ManifestPathHint        string   `json:"manifest_path_hint"`
-	ProviderStorageWritten  bool     `json:"provider_storage_written"`
-	PublicBundleAvailable   bool     `json:"public_bundle_available"`
+	Capabilities   []string `json:"capabilities"`
+	Unsupported    []string `json:"unsupported"`
+	SecurityLevel  string   `json:"security_level"`
+	DeviceLabel    string   `json:"device_label"`
+	IdentityExists bool     `json:"identity_exists"`
+
+	IdentityLoadable bool `json:"identity_loadable"`
+
+	IdentityCreated         bool   `json:"identity_created"`
+	StateWritten            bool   `json:"state_written"`
+	StateScope              string `json:"state_scope"`
+	StatePathHint           string `json:"state_path_hint"`
+	PrepManifestPathHint    string `json:"prep_manifest_path_hint"`
+	IdentitySummaryPathHint string `json:"identity_summary_path_hint"`
+	IdentityStatePathHint   string `json:"identity_state_path_hint"`
+	SignerPathHint          string `json:"signer_path_hint"`
+	PublicIdentityRef       string `json:"public_identity_ref"`
+	PublicSignatureKeyLen   int    `json:"public_signature_key_len"`
+	ManifestPathHint        string `json:"manifest_path_hint"`
+	ProviderStorageWritten  bool   `json:"provider_storage_written"`
+	PublicBundleAvailable   bool   `json:"public_bundle_available"`
 }
 
 type openMLSSidecarError struct {
@@ -267,8 +271,12 @@ func TestOpenMLSSidecarIdentityCreateWritesDevIdentityState(t *testing.T) {
 	assertFileExists(t, signerPath)
 
 	var summary struct {
-		SummaryVersion          string `json:"summary_version"`
-		DeviceLabel             string `json:"device_label"`
+		SummaryVersion string `json:"summary_version"`
+		DeviceLabel    string `json:"device_label"`
+		IdentityExists bool   `json:"identity_exists"`
+
+		IdentityLoadable bool `json:"identity_loadable"`
+
 		IdentityCreated         bool   `json:"identity_created"`
 		PublicIdentityRef       string `json:"public_identity_ref"`
 		PublicSignatureKeyLen   int    `json:"public_signature_key_len"`
@@ -317,8 +325,12 @@ func TestOpenMLSSidecarIdentityCreateWritesDevIdentityState(t *testing.T) {
 	}
 
 	var state struct {
-		StateVersion            string `json:"state_version"`
-		DeviceLabel             string `json:"device_label"`
+		StateVersion   string `json:"state_version"`
+		DeviceLabel    string `json:"device_label"`
+		IdentityExists bool   `json:"identity_exists"`
+
+		IdentityLoadable bool `json:"identity_loadable"`
+
 		IdentityCreated         bool   `json:"identity_created"`
 		SignerFile              string `json:"signer_file"`
 		ProviderStorageWritten  bool   `json:"provider_storage_written"`
@@ -393,6 +405,121 @@ func TestOpenMLSSidecarIdentityCreateRefusesOverwrite(t *testing.T) {
 	assertNoSecretMaterialInStdout(t, secondOutput)
 }
 
+func TestOpenMLSSidecarIdentityStatusMissing(t *testing.T) {
+	removeOpenMLSSidecarState(t)
+
+	output, err := runOpenMLSSidecar("identity-status", "--device-label", "carbonstack-alice-device")
+	assertExitCode(t, err, 3)
+
+	envelope := parseSidecarEnvelope(t, output)
+
+	if envelope.OK {
+		t.Fatal("missing identity-status envelope ok = true, want false")
+	}
+
+	if envelope.Command != "identity-status" {
+		t.Fatalf("command = %q, want identity-status", envelope.Command)
+	}
+
+	assertProviderEnvelopeBase(t, envelope)
+	assertSidecarError(t, envelope, "identity_missing", string(ProviderEventIdentityMissing), "warning", false)
+
+	if envelope.Data.IdentityExists {
+		t.Fatal("missing identity-status should report identity_exists=false")
+	}
+
+	if envelope.Data.IdentityLoadable {
+		t.Fatal("missing identity-status should report identity_loadable=false")
+	}
+
+	if envelope.PrivateMaterialIncluded {
+		t.Fatal("missing identity-status must not include private material")
+	}
+
+	assertNoSecretMaterialInStdout(t, output)
+}
+
+func TestOpenMLSSidecarIdentityStatusLoadsExistingIdentity(t *testing.T) {
+	removeOpenMLSSidecarState(t)
+
+	createOutput, createErr := runOpenMLSSidecar("identity-create", "--device-label", "carbonstack-alice-device")
+	if createErr != nil {
+		t.Fatalf("identity-create should exit 0 before status: %v\noutput:\n%s", createErr, string(createOutput))
+	}
+
+	createEnvelope := parseSidecarEnvelope(t, createOutput)
+
+	statusOutput, statusErr := runOpenMLSSidecar("identity-status", "--device-label", "carbonstack-alice-device")
+	if statusErr != nil {
+		t.Fatalf("identity-status should exit 0 after create: %v\noutput:\n%s", statusErr, string(statusOutput))
+	}
+
+	statusEnvelope := parseSidecarEnvelope(t, statusOutput)
+
+	if !statusEnvelope.OK {
+		t.Fatal("identity-status envelope ok = false, want true")
+	}
+
+	if statusEnvelope.Command != "identity-status" {
+		t.Fatalf("command = %q, want identity-status", statusEnvelope.Command)
+	}
+
+	assertProviderEnvelopeBase(t, statusEnvelope)
+
+	if statusEnvelope.Phase != "phase2d-identity-status-dev" {
+		t.Fatalf("phase = %q, want phase2d-identity-status-dev", statusEnvelope.Phase)
+	}
+
+	if !statusEnvelope.Data.IdentityExists {
+		t.Fatal("identity-status should report identity_exists=true")
+	}
+
+	if !statusEnvelope.Data.IdentityLoadable {
+		t.Fatal("identity-status should report identity_loadable=true")
+	}
+
+	if !statusEnvelope.Data.IdentityCreated {
+		t.Fatal("identity-status should report identity_created=true")
+	}
+
+	if statusEnvelope.Data.ProviderStorageWritten {
+		t.Fatal("identity-status must not claim provider storage was written")
+	}
+
+	if statusEnvelope.Data.PublicBundleAvailable {
+		t.Fatal("identity-status must not claim public bundle is available")
+	}
+
+	if statusEnvelope.PrivateMaterialIncluded {
+		t.Fatal("identity-status must not include private material")
+	}
+
+	if statusEnvelope.Data.PublicIdentityRef == "" {
+		t.Fatal("identity-status should return public identity ref")
+	}
+
+	if statusEnvelope.Data.PublicIdentityRef != createEnvelope.Data.PublicIdentityRef {
+		t.Fatalf("identity-status public identity ref = %q, want create ref %q", statusEnvelope.Data.PublicIdentityRef, createEnvelope.Data.PublicIdentityRef)
+	}
+
+	if statusEnvelope.Data.PublicSignatureKeyLen != createEnvelope.Data.PublicSignatureKeyLen {
+		t.Fatalf("identity-status public key len = %d, want create len %d", statusEnvelope.Data.PublicSignatureKeyLen, createEnvelope.Data.PublicSignatureKeyLen)
+	}
+
+	if len(statusEnvelope.Events) != 1 {
+		t.Fatalf("identity-status event count = %d, want 1", len(statusEnvelope.Events))
+	}
+
+	if statusEnvelope.Events[0].Event != string(ProviderEventIdentityLoaded) {
+		t.Fatalf("identity-status event = %q, want %q", statusEnvelope.Events[0].Event, ProviderEventIdentityLoaded)
+	}
+
+	if statusEnvelope.Events[0].TrustRelevant {
+		t.Fatal("identity-loaded event should not be trust relevant")
+	}
+
+	assertNoSecretMaterialInStdout(t, statusOutput)
+}
 func runOpenMLSSidecar(args ...string) ([]byte, error) {
 	sidecarDir := filepath.Clean(openMLSSidecarDir)
 
