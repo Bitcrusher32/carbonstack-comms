@@ -1,13 +1,16 @@
 mod labels;
+mod state;
 
 use labels::validate_device_label;
+use state::{device_state_dir, write_identity_prep_manifest};
 use std::env;
+use std::io;
 
 const PROVIDER_NAME: &str = "openmls";
 const IMPLEMENTATION: &str = "carbonstack-openmls-sidecar";
 const MODE: &str = "experimental-sidecar";
 const PHASE_PROVIDER_INFO: &str = "phase2d-provider-info";
-const PHASE_IDENTITY_CREATE: &str = "phase2d-identity-create-prep";
+const PHASE_IDENTITY_CREATE: &str = "phase2d-identity-create-state-skeleton";
 
 const WARNINGS: [&str; 4] = [
     "OpenMLS is not wired into CarbonStackComms",
@@ -68,8 +71,22 @@ fn handle_identity_create(args: &[String]) {
         std::process::exit(2);
     }
 
-    print_identity_create_not_implemented(device_label);
-    std::process::exit(3);
+    match write_identity_prep_manifest(device_label) {
+        Ok(manifest_path) => {
+            print_identity_create_prep_state_written(
+                device_label,
+                &manifest_path.to_string_lossy(),
+            );
+        }
+        Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
+            print_identity_create_already_exists(device_label);
+            std::process::exit(3);
+        }
+        Err(err) => {
+            print_identity_create_state_write_failed(device_label, &err.to_string());
+            std::process::exit(4);
+        }
+    }
 }
 
 fn parse_device_label(args: &[String]) -> Option<&str> {
@@ -118,7 +135,7 @@ fn print_provider_info() {
     "{warning1}",
     "{warning2}",
     "{warning3}",
-    "identity-create is recognized for argument validation only and does not generate secrets yet"
+    "identity-create writes dev-only non-secret prep state but does not generate OpenMLS secrets yet"
   ],
   "private_material_included": false
 }}"#,
@@ -238,7 +255,55 @@ fn print_identity_create_invalid_label(device_label: &str, reason: &str) {
     );
 }
 
-fn print_identity_create_not_implemented(device_label: &str) {
+fn print_identity_create_prep_state_written(device_label: &str, manifest_path: &str) {
+    let state_dir = device_state_dir(device_label);
+    let state_dir_hint = state_dir.to_string_lossy();
+
+    println!(
+        r#"{{
+  "ok": true,
+  "command": "identity-create",
+  "provider": "{provider}",
+  "implementation": "{implementation}",
+  "mode": "{mode}",
+  "phase": "{phase}",
+  "data": {{
+    "device_label": "{device_label}",
+    "identity_created": false,
+    "state_written": true,
+    "state_scope": "dev-local-sidecar-state",
+    "state_path_hint": "{state_path_hint}",
+    "manifest_path_hint": "{manifest_path}",
+    "provider_storage_written": false
+  }},
+  "events": [
+    {{
+      "event": "provider.identity.prep_state_written",
+      "severity": "notice",
+      "trust_relevant": false
+    }}
+  ],
+  "warnings": [
+    "prep manifest only; no OpenMLS identity material generated",
+    "no provider storage was written",
+    "private material was not printed"
+  ],
+  "private_material_included": false
+}}"#,
+        provider = PROVIDER_NAME,
+        implementation = IMPLEMENTATION,
+        mode = MODE,
+        phase = PHASE_IDENTITY_CREATE,
+        device_label = json_escape(device_label),
+        state_path_hint = json_escape(&state_dir_hint),
+        manifest_path = json_escape(manifest_path),
+    );
+}
+
+fn print_identity_create_already_exists(device_label: &str) {
+    let state_dir = device_state_dir(device_label);
+    let state_dir_hint = state_dir.to_string_lossy();
+
     println!(
         r#"{{
   "ok": false,
@@ -248,24 +313,64 @@ fn print_identity_create_not_implemented(device_label: &str) {
   "mode": "{mode}",
   "phase": "{phase}",
   "error": {{
-    "code": "not_implemented",
-    "message": "identity-create validated device label but does not generate identity material yet",
-    "provider_event": "provider.command.not_implemented",
+    "code": "identity_prep_state_already_exists",
+    "message": "identity prep state already exists; refusing overwrite",
+    "provider_event": "provider.identity.exists",
     "severity": "warning",
     "trust_relevant": false
   }},
   "events": [
     {{
-      "event": "provider.command.not_implemented",
+      "event": "provider.identity.exists",
       "severity": "warning",
       "trust_relevant": false
     }}
   ],
   "warnings": [
-    "no identity material was generated",
-    "no provider storage was written",
+    "existing prep state was not overwritten",
     "private material was not printed"
   ],
+  "private_material_included": false,
+  "data": {{
+    "device_label": "{device_label}",
+    "identity_created": false,
+    "state_written": false,
+    "state_path_hint": "{state_path_hint}"
+  }}
+}}"#,
+        provider = PROVIDER_NAME,
+        implementation = IMPLEMENTATION,
+        mode = MODE,
+        phase = PHASE_IDENTITY_CREATE,
+        device_label = json_escape(device_label),
+        state_path_hint = json_escape(&state_dir_hint),
+    );
+}
+
+fn print_identity_create_state_write_failed(device_label: &str, reason: &str) {
+    println!(
+        r#"{{
+  "ok": false,
+  "command": "identity-create",
+  "provider": "{provider}",
+  "implementation": "{implementation}",
+  "mode": "{mode}",
+  "phase": "{phase}",
+  "error": {{
+    "code": "state_write_failed",
+    "message": "identity prep state write failed: {reason}",
+    "provider_event": "checkpoint.failed",
+    "severity": "warning",
+    "trust_relevant": false
+  }},
+  "events": [
+    {{
+      "event": "checkpoint.failed",
+      "severity": "warning",
+      "trust_relevant": false
+    }}
+  ],
+  "warnings": [],
   "private_material_included": false,
   "data": {{
     "device_label": "{device_label}",
@@ -277,10 +382,10 @@ fn print_identity_create_not_implemented(device_label: &str) {
         implementation = IMPLEMENTATION,
         mode = MODE,
         phase = PHASE_IDENTITY_CREATE,
+        reason = json_escape(reason),
         device_label = json_escape(device_label),
     );
 }
-
 fn json_escape(value: &str) -> String {
     value
         .replace('\\', "\\\\")
@@ -300,7 +405,10 @@ mod tests {
         assert_eq!(IMPLEMENTATION, "carbonstack-openmls-sidecar");
         assert_eq!(MODE, "experimental-sidecar");
         assert_eq!(PHASE_PROVIDER_INFO, "phase2d-provider-info");
-        assert_eq!(PHASE_IDENTITY_CREATE, "phase2d-identity-create-prep");
+        assert_eq!(
+            PHASE_IDENTITY_CREATE,
+            "phase2d-identity-create-state-skeleton"
+        );
     }
 
     #[test]

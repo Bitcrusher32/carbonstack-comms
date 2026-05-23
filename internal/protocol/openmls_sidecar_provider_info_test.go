@@ -2,12 +2,14 @@ package protocol
 
 import (
 	"encoding/json"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 )
 
 const openMLSSidecarDir = "mls/research/openmls-sidecar"
+const openMLSSidecarStateDir = "mls/research/openmls-sidecar/.carbonstack-openmls-sidecar-state"
 
 type openMLSSidecarEnvelope struct {
 	OK                      bool                          `json:"ok"`
@@ -24,12 +26,16 @@ type openMLSSidecarEnvelope struct {
 }
 
 type openMLSSidecarProviderData struct {
-	Capabilities    []string `json:"capabilities"`
-	Unsupported     []string `json:"unsupported"`
-	SecurityLevel   string   `json:"security_level"`
-	DeviceLabel     string   `json:"device_label"`
-	IdentityCreated bool     `json:"identity_created"`
-	StateWritten    bool     `json:"state_written"`
+	Capabilities           []string `json:"capabilities"`
+	Unsupported            []string `json:"unsupported"`
+	SecurityLevel          string   `json:"security_level"`
+	DeviceLabel            string   `json:"device_label"`
+	IdentityCreated        bool     `json:"identity_created"`
+	StateWritten           bool     `json:"state_written"`
+	StateScope             string   `json:"state_scope"`
+	StatePathHint          string   `json:"state_path_hint"`
+	ManifestPathHint       string   `json:"manifest_path_hint"`
+	ProviderStorageWritten bool     `json:"provider_storage_written"`
 }
 
 type openMLSSidecarError struct {
@@ -91,7 +97,7 @@ func TestOpenMLSSidecarProviderInfoCommand(t *testing.T) {
 	}
 
 	if stringSliceContains(envelope.Data.Unsupported, "identity-create") {
-		t.Fatal("identity-create should not be listed as unsupported once command is recognized for validation")
+		t.Fatal("identity-create should not be listed as unsupported once command is recognized")
 	}
 
 	if envelope.Data.SecurityLevel == "" {
@@ -177,14 +183,18 @@ func TestOpenMLSSidecarIdentityCreateInvalidLabel(t *testing.T) {
 	}
 }
 
-func TestOpenMLSSidecarIdentityCreateSafeLabelNotImplemented(t *testing.T) {
+func TestOpenMLSSidecarIdentityCreateWritesPrepState(t *testing.T) {
+	removeOpenMLSSidecarState(t)
+
 	output, err := runOpenMLSSidecar("identity-create", "--device-label", "carbonstack-alice-device")
-	assertExitCode(t, err, 3)
+	if err != nil {
+		t.Fatalf("identity-create prep state should exit 0: %v\noutput:\n%s", err, string(output))
+	}
 
 	envelope := parseSidecarEnvelope(t, output)
 
-	if envelope.OK {
-		t.Fatal("not-implemented identity-create envelope ok = true, want false")
+	if !envelope.OK {
+		t.Fatal("identity-create prep state envelope ok = false, want true")
 	}
 
 	if envelope.Data.DeviceLabel != "carbonstack-alice-device" {
@@ -192,18 +202,94 @@ func TestOpenMLSSidecarIdentityCreateSafeLabelNotImplemented(t *testing.T) {
 	}
 
 	if envelope.Data.IdentityCreated {
-		t.Fatal("identity-create prep must not create identity material yet")
+		t.Fatal("identity-create state skeleton must not create identity material yet")
 	}
 
-	if envelope.Data.StateWritten {
-		t.Fatal("identity-create prep must not write state yet")
+	if !envelope.Data.StateWritten {
+		t.Fatal("identity-create state skeleton should write prep state")
+	}
+
+	if envelope.Data.ProviderStorageWritten {
+		t.Fatal("identity-create state skeleton must not write provider storage")
+	}
+
+	if envelope.PrivateMaterialIncluded {
+		t.Fatal("identity-create state skeleton must not include private material")
+	}
+
+	if envelope.Data.ManifestPathHint == "" {
+		t.Fatal("expected manifest path hint")
+	}
+
+	manifestPath := filepath.Join(openMLSSidecarDir, ".carbonstack-openmls-sidecar-state", "dev", "devices", "carbonstack-alice-device", "identity-prep.json")
+	manifestBytes, err := os.ReadFile(filepath.Clean(manifestPath))
+	if err != nil {
+		t.Fatalf("read prep manifest: %v", err)
+	}
+
+	if !json.Valid(manifestBytes) {
+		t.Fatalf("prep manifest is not valid JSON:\n%s", string(manifestBytes))
+	}
+
+	var manifest struct {
+		ManifestVersion         string `json:"manifest_version"`
+		DeviceLabel             string `json:"device_label"`
+		IdentityCreated         bool   `json:"identity_created"`
+		ProviderStorageWritten  bool   `json:"provider_storage_written"`
+		PrivateMaterialIncluded bool   `json:"private_material_included"`
+	}
+
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		t.Fatalf("parse prep manifest: %v", err)
+	}
+
+	if manifest.ManifestVersion != "identity-prep/v0" {
+		t.Fatalf("manifest version = %q, want identity-prep/v0", manifest.ManifestVersion)
+	}
+
+	if manifest.DeviceLabel != "carbonstack-alice-device" {
+		t.Fatalf("manifest device label = %q, want carbonstack-alice-device", manifest.DeviceLabel)
+	}
+
+	if manifest.IdentityCreated {
+		t.Fatal("manifest must not claim identity was created")
+	}
+
+	if manifest.ProviderStorageWritten {
+		t.Fatal("manifest must not claim provider storage was written")
+	}
+
+	if manifest.PrivateMaterialIncluded {
+		t.Fatal("manifest must not include private material")
+	}
+}
+
+func TestOpenMLSSidecarIdentityCreateRefusesOverwrite(t *testing.T) {
+	removeOpenMLSSidecarState(t)
+
+	firstOutput, firstErr := runOpenMLSSidecar("identity-create", "--device-label", "carbonstack-alice-device")
+	if firstErr != nil {
+		t.Fatalf("first identity-create should exit 0: %v\noutput:\n%s", firstErr, string(firstOutput))
+	}
+
+	secondOutput, secondErr := runOpenMLSSidecar("identity-create", "--device-label", "carbonstack-alice-device")
+	assertExitCode(t, secondErr, 3)
+
+	envelope := parseSidecarEnvelope(t, secondOutput)
+
+	if envelope.OK {
+		t.Fatal("overwrite refusal envelope ok = true, want false")
 	}
 
 	assertProviderEnvelopeBase(t, envelope)
-	assertSidecarError(t, envelope, "not_implemented", string(ProviderEventCommandNotImplemented), "warning", false)
+	assertSidecarError(t, envelope, "identity_prep_state_already_exists", "provider.identity.exists", "warning", false)
+
+	if envelope.Data.StateWritten {
+		t.Fatal("overwrite refusal should not report state_written")
+	}
 
 	if envelope.PrivateMaterialIncluded {
-		t.Fatal("not-implemented identity-create must not include private material")
+		t.Fatal("overwrite refusal must not include private material")
 	}
 }
 
@@ -215,6 +301,14 @@ func runOpenMLSSidecar(args ...string) ([]byte, error) {
 	cmd.Dir = sidecarDir
 
 	return cmd.Output()
+}
+
+func removeOpenMLSSidecarState(t *testing.T) {
+	t.Helper()
+
+	if err := os.RemoveAll(filepath.Clean(openMLSSidecarStateDir)); err != nil {
+		t.Fatalf("remove sidecar state dir: %v", err)
+	}
 }
 
 func parseSidecarEnvelope(t *testing.T, output []byte) openMLSSidecarEnvelope {
