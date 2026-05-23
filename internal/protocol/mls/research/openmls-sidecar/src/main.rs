@@ -1,11 +1,13 @@
 mod labels;
 
+use labels::validate_device_label;
 use std::env;
 
 const PROVIDER_NAME: &str = "openmls";
 const IMPLEMENTATION: &str = "carbonstack-openmls-sidecar";
 const MODE: &str = "experimental-sidecar";
-const PHASE: &str = "phase2d-provider-info";
+const PHASE_PROVIDER_INFO: &str = "phase2d-provider-info";
+const PHASE_IDENTITY_CREATE: &str = "phase2d-identity-create-prep";
 
 const WARNINGS: [&str; 4] = [
     "OpenMLS is not wired into CarbonStackComms",
@@ -14,8 +16,7 @@ const WARNINGS: [&str; 4] = [
     "no secret-bearing sidecar commands are implemented",
 ];
 
-const UNSUPPORTED_COMMANDS: [&str; 9] = [
-    "identity-create",
+const UNSUPPORTED_COMMANDS: [&str; 8] = [
     "public-bundle-export",
     "conversation-create",
     "conversation-add-member",
@@ -31,6 +32,7 @@ fn main() {
 
     match args.get(1).map(String::as_str) {
         Some("provider-info") => print_provider_info(),
+        Some("identity-create") => handle_identity_create(&args[2..]),
         Some("--help") | Some("-h") | None => print_help(),
         Some(other) => {
             print_unsupported_command(other);
@@ -45,11 +47,43 @@ fn print_help() {
     println!();
     println!("Supported commands:");
     println!("  provider-info");
+    println!(
+        "  identity-create --device-label <label>   (recognized, validates label, not implemented)"
+    );
     println!();
     println!("Unsupported intentionally:");
     for command in UNSUPPORTED_COMMANDS {
         println!("  {command}");
     }
+}
+
+fn handle_identity_create(args: &[String]) {
+    let Some(device_label) = parse_device_label(args) else {
+        print_identity_create_missing_label();
+        std::process::exit(2);
+    };
+
+    if let Err(reason) = validate_device_label(device_label) {
+        print_identity_create_invalid_label(device_label, &reason);
+        std::process::exit(2);
+    }
+
+    print_identity_create_not_implemented(device_label);
+    std::process::exit(3);
+}
+
+fn parse_device_label(args: &[String]) -> Option<&str> {
+    let mut index = 0;
+
+    while index < args.len() {
+        if args[index] == "--device-label" {
+            return args.get(index + 1).map(String::as_str);
+        }
+
+        index += 1;
+    }
+
+    None
 }
 
 fn print_provider_info() {
@@ -63,10 +97,10 @@ fn print_provider_info() {
   "phase": "{phase}",
   "data": {{
     "capabilities": [
-      "provider-info"
+      "provider-info",
+      "identity-create"
     ],
     "unsupported": [
-      "identity-create",
       "public-bundle-export",
       "conversation-create",
       "conversation-add-member",
@@ -83,14 +117,15 @@ fn print_provider_info() {
     "{warning0}",
     "{warning1}",
     "{warning2}",
-    "{warning3}"
+    "{warning3}",
+    "identity-create is recognized for argument validation only and does not generate secrets yet"
   ],
   "private_material_included": false
 }}"#,
         provider = PROVIDER_NAME,
         implementation = IMPLEMENTATION,
         mode = MODE,
-        phase = PHASE,
+        phase = PHASE_PROVIDER_INFO,
         warning0 = WARNINGS[0],
         warning1 = WARNINGS[1],
         warning2 = WARNINGS[2],
@@ -124,12 +159,135 @@ fn print_unsupported_command(command: &str) {
   "warnings": [],
   "private_material_included": false
 }}"#,
-        command = command,
+        command = json_escape(command),
         provider = PROVIDER_NAME,
         implementation = IMPLEMENTATION,
         mode = MODE,
-        phase = PHASE,
+        phase = PHASE_PROVIDER_INFO,
     );
+}
+
+fn print_identity_create_missing_label() {
+    println!(
+        r#"{{
+  "ok": false,
+  "command": "identity-create",
+  "provider": "{provider}",
+  "implementation": "{implementation}",
+  "mode": "{mode}",
+  "phase": "{phase}",
+  "error": {{
+    "code": "missing_required_argument",
+    "message": "identity-create requires --device-label <label>",
+    "provider_event": "provider.command.invalid",
+    "severity": "warning",
+    "trust_relevant": false
+  }},
+  "events": [
+    {{
+      "event": "provider.command.invalid",
+      "severity": "warning",
+      "trust_relevant": false
+    }}
+  ],
+  "warnings": [],
+  "private_material_included": false
+}}"#,
+        provider = PROVIDER_NAME,
+        implementation = IMPLEMENTATION,
+        mode = MODE,
+        phase = PHASE_IDENTITY_CREATE,
+    );
+}
+
+fn print_identity_create_invalid_label(device_label: &str, reason: &str) {
+    println!(
+        r#"{{
+  "ok": false,
+  "command": "identity-create",
+  "provider": "{provider}",
+  "implementation": "{implementation}",
+  "mode": "{mode}",
+  "phase": "{phase}",
+  "error": {{
+    "code": "invalid_device_label",
+    "message": "invalid device label: {reason}",
+    "provider_event": "provider.command.invalid",
+    "severity": "warning",
+    "trust_relevant": false
+  }},
+  "events": [
+    {{
+      "event": "provider.command.invalid",
+      "severity": "warning",
+      "trust_relevant": false
+    }}
+  ],
+  "warnings": [],
+  "private_material_included": false,
+  "data": {{
+    "device_label": "{device_label}"
+  }}
+}}"#,
+        provider = PROVIDER_NAME,
+        implementation = IMPLEMENTATION,
+        mode = MODE,
+        phase = PHASE_IDENTITY_CREATE,
+        reason = json_escape(reason),
+        device_label = json_escape(device_label),
+    );
+}
+
+fn print_identity_create_not_implemented(device_label: &str) {
+    println!(
+        r#"{{
+  "ok": false,
+  "command": "identity-create",
+  "provider": "{provider}",
+  "implementation": "{implementation}",
+  "mode": "{mode}",
+  "phase": "{phase}",
+  "error": {{
+    "code": "not_implemented",
+    "message": "identity-create validated device label but does not generate identity material yet",
+    "provider_event": "provider.command.not_implemented",
+    "severity": "warning",
+    "trust_relevant": false
+  }},
+  "events": [
+    {{
+      "event": "provider.command.not_implemented",
+      "severity": "warning",
+      "trust_relevant": false
+    }}
+  ],
+  "warnings": [
+    "no identity material was generated",
+    "no provider storage was written",
+    "private material was not printed"
+  ],
+  "private_material_included": false,
+  "data": {{
+    "device_label": "{device_label}",
+    "identity_created": false,
+    "state_written": false
+  }}
+}}"#,
+        provider = PROVIDER_NAME,
+        implementation = IMPLEMENTATION,
+        mode = MODE,
+        phase = PHASE_IDENTITY_CREATE,
+        device_label = json_escape(device_label),
+    );
+}
+
+fn json_escape(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t")
 }
 
 #[cfg(test)]
@@ -141,14 +299,31 @@ mod tests {
         assert_eq!(PROVIDER_NAME, "openmls");
         assert_eq!(IMPLEMENTATION, "carbonstack-openmls-sidecar");
         assert_eq!(MODE, "experimental-sidecar");
-        assert_eq!(PHASE, "phase2d-provider-info");
+        assert_eq!(PHASE_PROVIDER_INFO, "phase2d-provider-info");
+        assert_eq!(PHASE_IDENTITY_CREATE, "phase2d-identity-create-prep");
     }
 
     #[test]
-    fn unsupported_commands_include_secret_bearing_commands() {
-        assert!(UNSUPPORTED_COMMANDS.contains(&"identity-create"));
+    fn unsupported_commands_exclude_identity_create_after_recognition() {
+        assert!(!UNSUPPORTED_COMMANDS.contains(&"identity-create"));
         assert!(UNSUPPORTED_COMMANDS.contains(&"message-protect"));
         assert!(UNSUPPORTED_COMMANDS.contains(&"message-open"));
         assert!(UNSUPPORTED_COMMANDS.contains(&"state-checkpoint"));
+    }
+
+    #[test]
+    fn parses_device_label_argument() {
+        let args = vec![
+            "--device-label".to_string(),
+            "carbonstack-alice-device".to_string(),
+        ];
+
+        assert_eq!(parse_device_label(&args), Some("carbonstack-alice-device"));
+    }
+
+    #[test]
+    fn missing_device_label_argument_returns_none() {
+        let args = vec!["--other".to_string(), "value".to_string()];
+        assert_eq!(parse_device_label(&args), None);
     }
 }
