@@ -262,3 +262,22 @@ func TestDescribeProviderEventIdentityMissing(t *testing.T) {
 		t.Fatal("identity missing should not be trust relevant by default")
 	}
 }
+func TestDescribeProviderEventPublicBundleExported(t *testing.T) {
+	descriptor := DescribeProviderEvent(ProviderEventPublicBundleExported)
+
+	if descriptor.Name != ProviderEventPublicBundleExported {
+		t.Fatalf("public bundle exported event name = %q, want %q", descriptor.Name, ProviderEventPublicBundleExported)
+	}
+
+	if descriptor.Class != ProviderEventClassPublicSetup {
+		t.Fatalf("public bundle exported class = %q, want %q", descriptor.Class, ProviderEventClassPublicSetup)
+	}
+
+	if descriptor.Severity != ProviderEventSeverityInfo {
+		t.Fatalf("public bundle exported severity = %q, want %q", descriptor.Severity, ProviderEventSeverityInfo)
+	}
+
+	if descriptor.TrustRelevant {
+		t.Fatal("public bundle exported should not be trust relevant")
+	}
+}

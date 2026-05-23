@@ -27,27 +27,31 @@ type openMLSSidecarEnvelope struct {
 }
 
 type openMLSSidecarProviderData struct {
-	Capabilities   []string `json:"capabilities"`
-	Unsupported    []string `json:"unsupported"`
-	SecurityLevel  string   `json:"security_level"`
-	DeviceLabel    string   `json:"device_label"`
-	IdentityExists bool     `json:"identity_exists"`
-
-	IdentityLoadable bool `json:"identity_loadable"`
-
-	IdentityCreated         bool   `json:"identity_created"`
-	StateWritten            bool   `json:"state_written"`
-	StateScope              string `json:"state_scope"`
-	StatePathHint           string `json:"state_path_hint"`
-	PrepManifestPathHint    string `json:"prep_manifest_path_hint"`
-	IdentitySummaryPathHint string `json:"identity_summary_path_hint"`
-	IdentityStatePathHint   string `json:"identity_state_path_hint"`
-	SignerPathHint          string `json:"signer_path_hint"`
-	PublicIdentityRef       string `json:"public_identity_ref"`
-	PublicSignatureKeyLen   int    `json:"public_signature_key_len"`
-	ManifestPathHint        string `json:"manifest_path_hint"`
-	ProviderStorageWritten  bool   `json:"provider_storage_written"`
-	PublicBundleAvailable   bool   `json:"public_bundle_available"`
+	Capabilities                []string `json:"capabilities"`
+	Unsupported                 []string `json:"unsupported"`
+	SecurityLevel               string   `json:"security_level"`
+	DeviceLabel                 string   `json:"device_label"`
+	IdentityExists              bool     `json:"identity_exists"`
+	IdentityLoadable            bool     `json:"identity_loadable"`
+	IdentityCreated             bool     `json:"identity_created"`
+	StateWritten                bool     `json:"state_written"`
+	StateScope                  string   `json:"state_scope"`
+	StatePathHint               string   `json:"state_path_hint"`
+	PrepManifestPathHint        string   `json:"prep_manifest_path_hint"`
+	IdentitySummaryPathHint     string   `json:"identity_summary_path_hint"`
+	IdentityStatePathHint       string   `json:"identity_state_path_hint"`
+	SignerPathHint              string   `json:"signer_path_hint"`
+	PublicIdentityRef           string   `json:"public_identity_ref"`
+	PublicSignatureKeyLen       int      `json:"public_signature_key_len"`
+	ManifestPathHint            string   `json:"manifest_path_hint"`
+	ProviderStorageWritten      bool     `json:"provider_storage_written"`
+	PublicBundleAvailable       bool     `json:"public_bundle_available"`
+	PublicBundleExported        bool     `json:"public_bundle_exported"`
+	PublicBundleSummaryPathHint string   `json:"public_bundle_summary_path_hint"`
+	KeyPackageCreated           bool     `json:"key_package_created"`
+	KeyPackageArtifactWritten   bool     `json:"key_package_artifact_written"`
+	KeyPackageRef               string   `json:"key_package_ref"`
+	KeyPackageHashLen           int      `json:"key_package_hash_len"`
 }
 
 type openMLSSidecarError struct {
@@ -94,7 +98,6 @@ func TestOpenMLSSidecarProviderInfoCommand(t *testing.T) {
 	assertStringPresent(t, envelope.Data.Capabilities, "identity-create")
 
 	unsupported := []string{
-		"public-bundle-export",
 		"conversation-create",
 		"conversation-add-member",
 		"conversation-join",
@@ -126,7 +129,7 @@ func TestOpenMLSSidecarProviderInfoCommand(t *testing.T) {
 }
 
 func TestOpenMLSSidecarUnsupportedCommandEnvelope(t *testing.T) {
-	output, err := runOpenMLSSidecar("public-bundle-export")
+	output, err := runOpenMLSSidecar("conversation-create")
 	assertExitCode(t, err, 2)
 
 	envelope := parseSidecarEnvelope(t, output)
@@ -135,8 +138,8 @@ func TestOpenMLSSidecarUnsupportedCommandEnvelope(t *testing.T) {
 		t.Fatal("unsupported command envelope ok = true, want false")
 	}
 
-	if envelope.Command != "public-bundle-export" {
-		t.Fatalf("command = %q, want public-bundle-export", envelope.Command)
+	if envelope.Command != "conversation-create" {
+		t.Fatalf("command = %q, want conversation-create", envelope.Command)
 	}
 
 	assertProviderEnvelopeBase(t, envelope)
@@ -519,6 +522,193 @@ func TestOpenMLSSidecarIdentityStatusLoadsExistingIdentity(t *testing.T) {
 	}
 
 	assertNoSecretMaterialInStdout(t, statusOutput)
+}
+
+func TestOpenMLSSidecarPublicBundleExportMissingIdentity(t *testing.T) {
+	removeOpenMLSSidecarState(t)
+
+	output, err := runOpenMLSSidecar("public-bundle-export", "--device-label", "carbonstack-alice-device")
+	assertExitCode(t, err, 3)
+
+	envelope := parseSidecarEnvelope(t, output)
+
+	if envelope.OK {
+		t.Fatal("public-bundle-export missing identity envelope ok = true, want false")
+	}
+
+	if envelope.Command != "public-bundle-export" {
+		t.Fatalf("command = %q, want public-bundle-export", envelope.Command)
+	}
+
+	assertProviderEnvelopeBase(t, envelope)
+	assertSidecarError(t, envelope, "identity_missing", string(ProviderEventIdentityMissing), "warning", false)
+
+	if envelope.PrivateMaterialIncluded {
+		t.Fatal("public-bundle-export missing identity must not include private material")
+	}
+
+	assertNoSecretMaterialInStdout(t, output)
+}
+
+func TestOpenMLSSidecarPublicBundleExportCreatesSummary(t *testing.T) {
+	removeOpenMLSSidecarState(t)
+
+	createOutput, createErr := runOpenMLSSidecar("identity-create", "--device-label", "carbonstack-alice-device")
+	if createErr != nil {
+		t.Fatalf("identity-create should exit 0 before public-bundle-export: %v\noutput:\n%s", createErr, string(createOutput))
+	}
+
+	createEnvelope := parseSidecarEnvelope(t, createOutput)
+
+	exportOutput, exportErr := runOpenMLSSidecar("public-bundle-export", "--device-label", "carbonstack-alice-device")
+	if exportErr != nil {
+		t.Fatalf("public-bundle-export should exit 0 after identity-create: %v\noutput:\n%s", exportErr, string(exportOutput))
+	}
+
+	exportEnvelope := parseSidecarEnvelope(t, exportOutput)
+
+	if !exportEnvelope.OK {
+		t.Fatal("public-bundle-export envelope ok = false, want true")
+	}
+
+	if exportEnvelope.Command != "public-bundle-export" {
+		t.Fatalf("command = %q, want public-bundle-export", exportEnvelope.Command)
+	}
+
+	assertProviderEnvelopeBase(t, exportEnvelope)
+
+	if exportEnvelope.Phase != "phase2d-public-bundle-export-dev" {
+		t.Fatalf("phase = %q, want phase2d-public-bundle-export-dev", exportEnvelope.Phase)
+	}
+
+	if !exportEnvelope.Data.IdentityExists {
+		t.Fatal("public-bundle-export should report identity_exists=true")
+	}
+
+	if !exportEnvelope.Data.IdentityLoadable {
+		t.Fatal("public-bundle-export should report identity_loadable=true")
+	}
+
+	if !exportEnvelope.Data.PublicBundleExported {
+		t.Fatal("public-bundle-export should report public_bundle_exported=true")
+	}
+
+	if !exportEnvelope.Data.PublicBundleAvailable {
+		t.Fatal("public-bundle-export should report public_bundle_available=true")
+	}
+
+	if !exportEnvelope.Data.KeyPackageCreated {
+		t.Fatal("public-bundle-export should report key_package_created=true")
+	}
+
+	if exportEnvelope.Data.KeyPackageArtifactWritten {
+		t.Fatal("public-bundle-export must not claim full KeyPackage artifact was written in this rung")
+	}
+
+	if exportEnvelope.Data.ProviderStorageWritten {
+		t.Fatal("public-bundle-export must not claim provider storage was written")
+	}
+
+	if exportEnvelope.PrivateMaterialIncluded {
+		t.Fatal("public-bundle-export must not include private material")
+	}
+
+	if exportEnvelope.Data.PublicIdentityRef != createEnvelope.Data.PublicIdentityRef {
+		t.Fatalf("public identity ref = %q, want create ref %q", exportEnvelope.Data.PublicIdentityRef, createEnvelope.Data.PublicIdentityRef)
+	}
+
+	if exportEnvelope.Data.KeyPackageRef == "" {
+		t.Fatal("public-bundle-export should return key package ref")
+	}
+
+	if !strings.HasPrefix(exportEnvelope.Data.KeyPackageRef, "sha256:") {
+		t.Fatalf("key package ref = %q, want sha256 prefix", exportEnvelope.Data.KeyPackageRef)
+	}
+
+	if exportEnvelope.Data.KeyPackageHashLen != 32 {
+		t.Fatalf("key package hash len = %d, want 32", exportEnvelope.Data.KeyPackageHashLen)
+	}
+
+	if len(exportEnvelope.Events) != 1 {
+		t.Fatalf("public-bundle-export event count = %d, want 1", len(exportEnvelope.Events))
+	}
+
+	if exportEnvelope.Events[0].Event != string(ProviderEventPublicBundleExported) {
+		t.Fatalf("public-bundle-export event = %q, want %q", exportEnvelope.Events[0].Event, ProviderEventPublicBundleExported)
+	}
+
+	if exportEnvelope.Events[0].TrustRelevant {
+		t.Fatal("public-bundle-export event should not be trust relevant")
+	}
+
+	assertNoSecretMaterialInStdout(t, exportOutput)
+
+	stateDir := filepath.Join(openMLSSidecarDir, ".carbonstack-openmls-sidecar-state", "dev", "devices", "carbonstack-alice-device")
+	publicBundleSummaryPath := filepath.Join(stateDir, "public-bundle-summary.json")
+	signerPath := filepath.Join(stateDir, "signer.json")
+
+	assertFileExists(t, publicBundleSummaryPath)
+	assertFileExists(t, signerPath)
+
+	var summary struct {
+		SummaryVersion            string `json:"summary_version"`
+		DeviceLabel               string `json:"device_label"`
+		PublicIdentityRef         string `json:"public_identity_ref"`
+		PublicSignatureKeyLen     int    `json:"public_signature_key_len"`
+		KeyPackageCreated         bool   `json:"key_package_created"`
+		KeyPackageRef             string `json:"key_package_ref"`
+		KeyPackageHashLen         int    `json:"key_package_hash_len"`
+		KeyPackageArtifactWritten bool   `json:"key_package_artifact_written"`
+		PublicBundleAvailable     bool   `json:"public_bundle_available"`
+		ProviderStorageWritten    bool   `json:"provider_storage_written"`
+		PrivateMaterialIncluded   bool   `json:"private_material_included"`
+	}
+
+	readJSONFile(t, publicBundleSummaryPath, &summary)
+
+	if summary.SummaryVersion != "public-bundle-summary/v0" {
+		t.Fatalf("summary version = %q, want public-bundle-summary/v0", summary.SummaryVersion)
+	}
+
+	if summary.DeviceLabel != "carbonstack-alice-device" {
+		t.Fatalf("summary device label = %q, want carbonstack-alice-device", summary.DeviceLabel)
+	}
+
+	if summary.PublicIdentityRef != createEnvelope.Data.PublicIdentityRef {
+		t.Fatalf("summary public identity ref = %q, want create ref %q", summary.PublicIdentityRef, createEnvelope.Data.PublicIdentityRef)
+	}
+
+	if summary.PublicSignatureKeyLen != createEnvelope.Data.PublicSignatureKeyLen {
+		t.Fatalf("summary public signature key len = %d, want create len %d", summary.PublicSignatureKeyLen, createEnvelope.Data.PublicSignatureKeyLen)
+	}
+
+	if !summary.KeyPackageCreated {
+		t.Fatal("summary should report key_package_created=true")
+	}
+
+	if summary.KeyPackageRef == "" || !strings.HasPrefix(summary.KeyPackageRef, "sha256:") {
+		t.Fatalf("summary key package ref = %q, want sha256 ref", summary.KeyPackageRef)
+	}
+
+	if summary.KeyPackageHashLen != 32 {
+		t.Fatalf("summary key package hash len = %d, want 32", summary.KeyPackageHashLen)
+	}
+
+	if summary.KeyPackageArtifactWritten {
+		t.Fatal("summary must not claim full KeyPackage artifact was written")
+	}
+
+	if !summary.PublicBundleAvailable {
+		t.Fatal("summary should report public_bundle_available=true")
+	}
+
+	if summary.ProviderStorageWritten {
+		t.Fatal("summary must not claim provider storage was written")
+	}
+
+	if summary.PrivateMaterialIncluded {
+		t.Fatal("summary must not include private material")
+	}
 }
 func runOpenMLSSidecar(args ...string) ([]byte, error) {
 	sidecarDir := filepath.Clean(openMLSSidecarDir)

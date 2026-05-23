@@ -48,6 +48,7 @@ const (
 	ProviderEventCheckpointFailed         ProviderEventName = "checkpoint.failed"
 	ProviderEventPublicBundleCreated      ProviderEventName = "provider.public_bundle.created"
 
+	ProviderEventPublicBundleExported       ProviderEventName = "provider.public_bundle.exported"
 	ProviderEventConversationCreated        ProviderEventName = "conversation.created"
 	ProviderEventConversationWelcomeCreated ProviderEventName = "conversation.welcome.created"
 	ProviderEventConversationWelcomeStaged  ProviderEventName = "conversation.welcome.staged"
@@ -153,7 +154,7 @@ func DescribeProviderEvent(name ProviderEventName) ProviderEventDescriptor {
 			Severity:      ProviderEventSeverityWarning,
 			TrustRelevant: false,
 		}
-	case ProviderEventPublicBundleCreated:
+	case ProviderEventPublicBundleCreated, ProviderEventPublicBundleExported:
 		return ProviderEventDescriptor{
 			Name:          name,
 			Class:         ProviderEventClassPublicSetup,

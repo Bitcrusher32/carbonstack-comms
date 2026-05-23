@@ -385,3 +385,29 @@ func TestDecideProviderTrustIdentityMissing(t *testing.T) {
 		t.Fatal("identity missing descriptor should not be cryptographic trust relevant by default")
 	}
 }
+func TestDecideProviderTrustPublicBundleExported(t *testing.T) {
+	decision := DecideProviderTrust(ProviderEventPublicBundleExported)
+
+	assertHasAction(t, decision, ProviderTrustActionAppendHistory)
+	assertHasAction(t, decision, ProviderTrustActionDebugOnly)
+
+	if decision.BlocksSend || decision.BlocksReceive || decision.BlocksOpen {
+		t.Fatal("public bundle exported should not block send, receive, or open")
+	}
+
+	if decision.RequiresReverify {
+		t.Fatal("public bundle exported should not require reverify")
+	}
+
+	if decision.UserVisible {
+		t.Fatal("public bundle exported should not be user visible")
+	}
+
+	if !decision.HistoryRelevant {
+		t.Fatal("public bundle exported should be history relevant")
+	}
+
+	if decision.Descriptor.TrustRelevant {
+		t.Fatal("public bundle exported descriptor should not be trust relevant")
+	}
+}

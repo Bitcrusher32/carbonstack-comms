@@ -300,6 +300,115 @@ fn read_json_file<T: for<'de> Deserialize<'de>>(path: &Path) -> io::Result<T> {
         )
     })
 }
+
+#[derive(Debug, Clone)]
+pub struct PublicBundleExportResult {
+    pub device_label: String,
+    pub state_dir: PathBuf,
+    pub public_bundle_summary_path: PathBuf,
+    pub public_identity_ref: String,
+    pub public_signature_key_len: usize,
+    pub key_package_ref: String,
+    pub key_package_hash_len: usize,
+    pub provider_storage_written: bool,
+}
+
+#[derive(Serialize)]
+struct PublicBundleSummary<'a> {
+    summary_version: &'a str,
+    device_label: &'a str,
+    ciphersuite: &'a str,
+    credential_type: &'a str,
+    public_identity_ref: &'a str,
+    public_signature_key_len: usize,
+    key_package_created: bool,
+    key_package_ref: &'a str,
+    key_package_hash_len: usize,
+    key_package_artifact_written: bool,
+    public_bundle_available: bool,
+    provider_storage_written: bool,
+    private_material_included: bool,
+    warning: &'a str,
+}
+
+pub fn public_bundle_summary_path(device_label: &str) -> PathBuf {
+    device_state_dir(device_label).join("public-bundle-summary.json")
+}
+
+pub fn export_dev_public_bundle_summary(
+    device_label: &str,
+) -> io::Result<PublicBundleExportResult> {
+    let status = load_dev_identity_status(device_label)?;
+
+    let signer: SignatureKeyPair = read_json_file(&status.signer_path).map_err(|err| {
+        io::Error::new(io::ErrorKind::Other, format!("signer load failed: {err}"))
+    })?;
+
+    let ciphersuite = Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
+
+    let credential = BasicCredential::new(device_label.as_bytes().to_vec());
+
+    let credential_with_key = CredentialWithKey {
+        credential: credential.into(),
+        signature_key: signer.to_public_vec().into(),
+    };
+
+    let provider = openmls_rust_crypto::OpenMlsRustCrypto::default();
+
+    let key_package_bundle = KeyPackage::builder()
+        .build(ciphersuite, &provider, &signer, credential_with_key)
+        .map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("key package build failed: {err:?}"),
+            )
+        })?;
+
+    let key_package = key_package_bundle.key_package().clone();
+
+    let key_package_hash = key_package.hash_ref(provider.crypto()).map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("key package hash failed: {err:?}"),
+        )
+    })?;
+
+    let key_package_hash_bytes = key_package_hash.as_slice();
+    let key_package_ref = format!("sha256:{}", hex::encode(key_package_hash_bytes));
+
+    let public_bundle_summary_path = public_bundle_summary_path(device_label);
+
+    write_json_file(
+        &public_bundle_summary_path,
+        &PublicBundleSummary {
+            summary_version: "public-bundle-summary/v0",
+            device_label,
+            ciphersuite: CIPHERSUITE_LABEL,
+            credential_type: "BasicCredential",
+            public_identity_ref: &status.public_identity_ref,
+            public_signature_key_len: status.public_signature_key_len,
+            key_package_created: true,
+            key_package_ref: &key_package_ref,
+            key_package_hash_len: key_package_hash_bytes.len(),
+            key_package_artifact_written: false,
+            public_bundle_available: true,
+            provider_storage_written: false,
+            private_material_included: false,
+            warning: "dev-only public bundle summary; full serialized KeyPackage artifact is not exported in this rung",
+        },
+    )?;
+
+    Ok(PublicBundleExportResult {
+        device_label: device_label.to_string(),
+        state_dir: status.state_dir,
+        public_bundle_summary_path,
+        public_identity_ref: status.public_identity_ref,
+        public_signature_key_len: status.public_signature_key_len,
+        key_package_ref,
+        key_package_hash_len: key_package_hash_bytes.len(),
+        provider_storage_written: false,
+    })
+}
 fn public_identity_ref(public_signature_key: &[u8]) -> String {
     let digest = Sha256::digest(public_signature_key);
     format!("sha256:{}", hex::encode(digest))
