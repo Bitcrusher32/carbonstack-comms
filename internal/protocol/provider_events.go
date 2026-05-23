@@ -35,13 +35,15 @@ const (
 type ProviderEventName string
 
 const (
-	ProviderEventFixtureStarted        ProviderEventName = "provider.fixture.started"
-	ProviderEventFixtureCompleted      ProviderEventName = "provider.fixture.completed"
-	ProviderEventCommandUnsupported    ProviderEventName = "provider.command.unsupported"
-	ProviderEventCommandInvalid        ProviderEventName = "provider.command.invalid"
-	ProviderEventCommandNotImplemented ProviderEventName = "provider.command.not_implemented"
-
-	ProviderEventPublicBundleCreated ProviderEventName = "provider.public_bundle.created"
+	ProviderEventFixtureStarted           ProviderEventName = "provider.fixture.started"
+	ProviderEventFixtureCompleted         ProviderEventName = "provider.fixture.completed"
+	ProviderEventCommandUnsupported       ProviderEventName = "provider.command.unsupported"
+	ProviderEventCommandInvalid           ProviderEventName = "provider.command.invalid"
+	ProviderEventCommandNotImplemented    ProviderEventName = "provider.command.not_implemented"
+	ProviderEventIdentityPrepStateWritten ProviderEventName = "provider.identity.prep_state_written"
+	ProviderEventIdentityExists           ProviderEventName = "provider.identity.exists"
+	ProviderEventCheckpointFailed         ProviderEventName = "checkpoint.failed"
+	ProviderEventPublicBundleCreated      ProviderEventName = "provider.public_bundle.created"
 
 	ProviderEventConversationCreated        ProviderEventName = "conversation.created"
 	ProviderEventConversationWelcomeCreated ProviderEventName = "conversation.welcome.created"
@@ -61,14 +63,12 @@ const (
 	ProviderEventStorageCorrupt      ProviderEventName = "storage.corrupt"
 	ProviderEventCheckpointRequired  ProviderEventName = "checkpoint.required"
 	ProviderEventCheckpointCompleted ProviderEventName = "checkpoint.completed"
-	ProviderEventCheckpointFailed    ProviderEventName = "checkpoint.failed"
-
-	ProviderEventSignatureInvalid ProviderEventName = "provider.signature.invalid"
-	ProviderEventIdentityChanged  ProviderEventName = "provider.identity.changed"
-	ProviderEventReverifyRequired ProviderEventName = "provider.identity.reverify.required"
-	ProviderEventTamperDetected   ProviderEventName = "provider.message.tamper.detected"
-	ProviderEventReplayDetected   ProviderEventName = "provider.replay.detected"
-	ProviderEventStaleEpoch       ProviderEventName = "provider.epoch.stale"
+	ProviderEventSignatureInvalid    ProviderEventName = "provider.signature.invalid"
+	ProviderEventIdentityChanged     ProviderEventName = "provider.identity.changed"
+	ProviderEventReverifyRequired    ProviderEventName = "provider.identity.reverify.required"
+	ProviderEventTamperDetected      ProviderEventName = "provider.message.tamper.detected"
+	ProviderEventReplayDetected      ProviderEventName = "provider.replay.detected"
+	ProviderEventStaleEpoch          ProviderEventName = "provider.epoch.stale"
 
 	ProviderEventFatal              ProviderEventName = "provider.fatal"
 	ProviderEventStateInconsistent  ProviderEventName = "provider.state.inconsistent"
@@ -113,7 +113,21 @@ func DescribeProviderEvent(name ProviderEventName) ProviderEventDescriptor {
 			Severity:      ProviderEventSeverityWarning,
 			TrustRelevant: false,
 		}
+	case ProviderEventIdentityPrepStateWritten:
+		return ProviderEventDescriptor{
+			Name:          name,
+			Class:         ProviderEventClassStorageCheckpoint,
+			Severity:      ProviderEventSeverityInfo,
+			TrustRelevant: false,
+		}
 
+	case ProviderEventIdentityExists:
+		return ProviderEventDescriptor{
+			Name:          name,
+			Class:         ProviderEventClassStorageCheckpoint,
+			Severity:      ProviderEventSeverityWarning,
+			TrustRelevant: false,
+		}
 	case ProviderEventPublicBundleCreated:
 		return ProviderEventDescriptor{
 			Name:          name,

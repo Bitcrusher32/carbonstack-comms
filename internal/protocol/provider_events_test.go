@@ -145,3 +145,62 @@ func TestDescribeProviderEventCommandNotImplemented(t *testing.T) {
 		t.Fatal("not-implemented command should not be trust relevant")
 	}
 }
+func TestDescribeProviderEventIdentityPrepStateWritten(t *testing.T) {
+	descriptor := DescribeProviderEvent(ProviderEventIdentityPrepStateWritten)
+
+	if descriptor.Name != ProviderEventIdentityPrepStateWritten {
+		t.Fatalf("identity prep state event name = %q, want %q", descriptor.Name, ProviderEventIdentityPrepStateWritten)
+	}
+
+	if descriptor.Class != ProviderEventClassStorageCheckpoint {
+		t.Fatalf("identity prep state class = %q, want %q", descriptor.Class, ProviderEventClassStorageCheckpoint)
+	}
+
+	if descriptor.Severity != ProviderEventSeverityInfo {
+		t.Fatalf("identity prep state severity = %q, want %q", descriptor.Severity, ProviderEventSeverityInfo)
+	}
+
+	if descriptor.TrustRelevant {
+		t.Fatal("identity prep state should not be trust relevant")
+	}
+}
+
+func TestDescribeProviderEventIdentityExists(t *testing.T) {
+	descriptor := DescribeProviderEvent(ProviderEventIdentityExists)
+
+	if descriptor.Name != ProviderEventIdentityExists {
+		t.Fatalf("identity exists event name = %q, want %q", descriptor.Name, ProviderEventIdentityExists)
+	}
+
+	if descriptor.Class != ProviderEventClassStorageCheckpoint {
+		t.Fatalf("identity exists class = %q, want %q", descriptor.Class, ProviderEventClassStorageCheckpoint)
+	}
+
+	if descriptor.Severity != ProviderEventSeverityWarning {
+		t.Fatalf("identity exists severity = %q, want %q", descriptor.Severity, ProviderEventSeverityWarning)
+	}
+
+	if descriptor.TrustRelevant {
+		t.Fatal("identity exists should not be trust relevant")
+	}
+}
+
+func TestDescribeProviderEventCheckpointFailed(t *testing.T) {
+	descriptor := DescribeProviderEvent(ProviderEventCheckpointFailed)
+
+	if descriptor.Name != ProviderEventCheckpointFailed {
+		t.Fatalf("checkpoint failed event name = %q, want %q", descriptor.Name, ProviderEventCheckpointFailed)
+	}
+
+	if descriptor.Class != ProviderEventClassStorageCheckpoint {
+		t.Fatalf("checkpoint failed class = %q, want %q", descriptor.Class, ProviderEventClassStorageCheckpoint)
+	}
+
+	if descriptor.Severity != ProviderEventSeverityWarning {
+		t.Fatalf("checkpoint failed severity = %q, want %q", descriptor.Severity, ProviderEventSeverityWarning)
+	}
+
+	if descriptor.TrustRelevant {
+		t.Fatal("checkpoint failed should not be trust relevant by default at this rung")
+	}
+}

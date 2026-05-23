@@ -282,7 +282,7 @@ func TestOpenMLSSidecarIdentityCreateRefusesOverwrite(t *testing.T) {
 	}
 
 	assertProviderEnvelopeBase(t, envelope)
-	assertSidecarError(t, envelope, "identity_prep_state_already_exists", "provider.identity.exists", "warning", false)
+	assertSidecarError(t, envelope, "identity_prep_state_already_exists", string(ProviderEventIdentityExists), "warning", false)
 
 	if envelope.Data.StateWritten {
 		t.Fatal("overwrite refusal should not report state_written")

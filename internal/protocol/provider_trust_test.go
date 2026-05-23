@@ -234,3 +234,78 @@ func assertCommandSurfaceDecision(t *testing.T, decision ProviderTrustDecision, 
 		t.Fatalf("%q descriptor should not be trust relevant", event)
 	}
 }
+func TestDecideProviderTrustIdentityPrepStateWritten(t *testing.T) {
+	decision := DecideProviderTrust(ProviderEventIdentityPrepStateWritten)
+
+	assertHasAction(t, decision, ProviderTrustActionAppendHistory)
+	assertHasAction(t, decision, ProviderTrustActionDebugOnly)
+
+	if decision.BlocksSend || decision.BlocksReceive || decision.BlocksOpen {
+		t.Fatal("identity prep state written should not block send, receive, or open")
+	}
+
+	if decision.RequiresReverify {
+		t.Fatal("identity prep state written should not require reverify")
+	}
+
+	if decision.UserVisible {
+		t.Fatal("identity prep state written should not be user visible")
+	}
+
+	if !decision.HistoryRelevant {
+		t.Fatal("identity prep state written should be history relevant")
+	}
+
+	if decision.Descriptor.TrustRelevant {
+		t.Fatal("identity prep state descriptor should not be trust relevant")
+	}
+}
+
+func TestDecideProviderTrustIdentityExists(t *testing.T) {
+	decision := DecideProviderTrust(ProviderEventIdentityExists)
+
+	assertHasAction(t, decision, ProviderTrustActionAppendHistory)
+	assertHasAction(t, decision, ProviderTrustActionDebugOnly)
+
+	if decision.BlocksSend || decision.BlocksReceive || decision.BlocksOpen {
+		t.Fatal("identity exists should not block send, receive, or open")
+	}
+
+	if decision.RequiresReverify {
+		t.Fatal("identity exists should not require reverify")
+	}
+
+	if decision.UserVisible {
+		t.Fatal("identity exists should not be user visible")
+	}
+
+	if !decision.HistoryRelevant {
+		t.Fatal("identity exists should be history relevant")
+	}
+
+	if decision.Descriptor.TrustRelevant {
+		t.Fatal("identity exists descriptor should not be trust relevant")
+	}
+}
+
+func TestDecideProviderTrustCheckpointFailed(t *testing.T) {
+	decision := DecideProviderTrust(ProviderEventCheckpointFailed)
+
+	assertHasAction(t, decision, ProviderTrustActionStopOperation)
+	assertHasAction(t, decision, ProviderTrustActionShowRecoveryPath)
+
+	if !decision.BlocksSend {
+		t.Fatal("checkpoint failed should block send/current outgoing state mutation")
+	}
+	if decision.RequiresReverify {
+		t.Fatal("checkpoint failed should not require reverify by default")
+	}
+
+	if !decision.HistoryRelevant {
+		t.Fatal("checkpoint failed should be history relevant")
+	}
+
+	if decision.Descriptor.TrustRelevant {
+		t.Fatal("checkpoint failed descriptor should not be cryptographic trust relevant by default")
+	}
+}
