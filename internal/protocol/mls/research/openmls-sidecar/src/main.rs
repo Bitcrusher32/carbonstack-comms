@@ -1,4 +1,6 @@
-﻿use std::env;
+mod labels;
+
+use std::env;
 
 const PROVIDER_NAME: &str = "openmls";
 const IMPLEMENTATION: &str = "carbonstack-openmls-sidecar";
