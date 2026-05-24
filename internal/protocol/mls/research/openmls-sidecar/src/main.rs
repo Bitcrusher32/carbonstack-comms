@@ -1,11 +1,13 @@
-mod labels;
+﻿mod labels;
+mod provider;
 mod state;
 
 use labels::{validate_conversation_label, validate_device_label};
 use state::{
-    ConversationCreateResult, IdentityCreateResult, IdentityStatusResult, PublicBundleExportResult,
-    create_dev_conversation, create_dev_identity, device_state_dir,
-    export_dev_public_bundle_summary, load_dev_identity_status,
+    ConversationCreateResult, ConversationLoadCheckResult, IdentityCreateResult,
+    IdentityStatusResult, PublicBundleExportResult, create_dev_conversation, create_dev_identity,
+    device_state_dir, export_dev_public_bundle_summary, load_dev_conversation_status,
+    load_dev_identity_status,
 };
 use std::env;
 use std::io;
@@ -44,6 +46,7 @@ fn main() {
         Some("identity-status") => handle_identity_status(&args[2..]),
         Some("public-bundle-export") => handle_public_bundle_export(&args[2..]),
         Some("conversation-create") => handle_conversation_create(&args[2..]),
+        Some("conversation-load-check") => handle_conversation_load_check(&args[2..]),
         Some("--help") | Some("-h") | None => print_help(),
         Some(other) => {
             print_unsupported_command(other);
@@ -239,6 +242,7 @@ fn print_conversation_create_success(result: &ConversationCreateResult) {
             "state_scope": "dev-local-sidecar-state",
             "conversation_state_path_hint": result.conversation_state_dir.to_string_lossy(),
             "conversation_summary_path_hint": result.conversation_summary_path.to_string_lossy(),
+            "provider_storage_path_hint": result.provider_storage_path.to_string_lossy(),
             "ciphersuite": "MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519",
             "group_id_ref": result.group_id_ref,
             "group_id_len": result.group_id_len,
@@ -256,8 +260,8 @@ fn print_conversation_create_success(result: &ConversationCreateResult) {
         ],
         "warnings": [
             "dev-only OpenMLS conversation state; not production messaging",
-            "conversation group is not reloadable across sidecar process invocations yet",
-            "conversation-add-member is blocked until provider/group persistence is repaired",
+            "conversation group is reloadable through dev-local provider storage",
+            "provider storage is dev-only and not production secure vault storage",
             "private material was loaded locally but not printed",
             "conversation-add-member is not implemented",
             "conversation-join is not implemented",
@@ -407,6 +411,256 @@ fn print_conversation_create_invalid_label_common(
     );
 }
 
+fn handle_conversation_load_check(args: &[String]) {
+    let Some(device_label) = parse_device_label(args) else {
+        print_conversation_load_check_missing_argument("--device-label");
+        std::process::exit(2);
+    };
+
+    let Some(conversation_label) = parse_conversation_label(args) else {
+        print_conversation_load_check_missing_argument("--conversation-label");
+        std::process::exit(2);
+    };
+
+    if let Err(reason) = validate_device_label(device_label) {
+        print_conversation_load_check_invalid_label(
+            device_label,
+            conversation_label,
+            "invalid_device_label",
+            &reason,
+        );
+        std::process::exit(2);
+    }
+
+    if let Err(reason) = validate_conversation_label(conversation_label) {
+        print_conversation_load_check_invalid_label(
+            device_label,
+            conversation_label,
+            "invalid_conversation_label",
+            &reason,
+        );
+        std::process::exit(2);
+    }
+
+    match load_dev_conversation_status(device_label, conversation_label) {
+        Ok(result) => {
+            print_conversation_load_check_success(&result);
+        }
+        Err(err) if err.kind() == io::ErrorKind::NotFound => {
+            print_conversation_load_check_missing(device_label, conversation_label, &err);
+            std::process::exit(3);
+        }
+        Err(err) => {
+            print_conversation_load_check_unavailable(device_label, conversation_label, &err);
+            std::process::exit(3);
+        }
+    }
+}
+
+fn print_conversation_load_check_success(result: &ConversationLoadCheckResult) {
+    let envelope = serde_json::json!({
+        "ok": true,
+        "command": "conversation-load-check",
+        "provider": PROVIDER_NAME,
+        "implementation": IMPLEMENTATION,
+        "mode": MODE,
+        "phase": "phase2d-conversation-load-check-dev",
+        "private_material_included": false,
+        "data": {
+            "device_label": result.device_label,
+            "conversation_label": result.conversation_label,
+            "conversation_state_path_hint": result.conversation_state_dir.to_string_lossy(),
+            "conversation_summary_path_hint": result.conversation_summary_path.to_string_lossy(),
+            "provider_storage_path_hint": result.provider_storage_path.to_string_lossy(),
+            "provider_storage_loaded": result.provider_storage_loaded,
+            "group_reloadable": result.group_reloadable,
+            "group_id_ref": result.group_id_ref,
+            "group_id_len": result.group_id_len,
+            "member_count": result.member_count,
+            "epoch": result.epoch,
+            "state_scope": "dev-local-sidecar-state"
+        },
+        "events": [
+            {
+                "event": "conversation.loaded",
+                "severity": "info",
+                "trust_relevant": false
+            }
+        ],
+        "warnings": [
+            "dev-only OpenMLS conversation provider storage loaded",
+            "provider storage is not production secure vault storage",
+            "private material may be required locally by OpenMLS but is not printed",
+            "conversation-add-member is not implemented",
+            "conversation-join is not implemented",
+            "message protect/open is not implemented"
+        ]
+    });
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&envelope).expect("provider envelope JSON should serialize")
+    );
+}
+
+fn print_conversation_load_check_missing_argument(argument: &str) {
+    let envelope = serde_json::json!({
+        "ok": false,
+        "command": "conversation-load-check",
+        "provider": PROVIDER_NAME,
+        "implementation": IMPLEMENTATION,
+        "mode": MODE,
+        "phase": "phase2d-conversation-load-check-dev",
+        "private_material_included": false,
+        "error": {
+            "code": "missing_required_argument",
+            "message": format!("conversation-load-check requires {argument}")
+        },
+        "events": [
+            {
+                "event": "provider.command.invalid",
+                "severity": "warning",
+                "trust_relevant": false
+            }
+        ],
+        "warnings": [
+            "missing required conversation-load-check argument",
+            "no private material printed"
+        ]
+    });
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&envelope).expect("provider envelope JSON should serialize")
+    );
+}
+
+fn print_conversation_load_check_invalid_label(
+    device_label: &str,
+    conversation_label: &str,
+    code: &str,
+    reason: &str,
+) {
+    let envelope = serde_json::json!({
+        "ok": false,
+        "command": "conversation-load-check",
+        "provider": PROVIDER_NAME,
+        "implementation": IMPLEMENTATION,
+        "mode": MODE,
+        "phase": "phase2d-conversation-load-check-dev",
+        "private_material_included": false,
+        "error": {
+            "code": code,
+            "message": reason
+        },
+        "data": {
+            "device_label": device_label,
+            "conversation_label": conversation_label,
+            "provider_storage_loaded": false,
+            "group_reloadable": false
+        },
+        "events": [
+            {
+                "event": "provider.command.invalid",
+                "severity": "warning",
+                "trust_relevant": false
+            }
+        ],
+        "warnings": [
+            "invalid conversation-load-check label",
+            "no private material printed"
+        ]
+    });
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&envelope).expect("provider envelope JSON should serialize")
+    );
+}
+
+fn print_conversation_load_check_missing(
+    device_label: &str,
+    conversation_label: &str,
+    err: &io::Error,
+) {
+    let envelope = serde_json::json!({
+        "ok": false,
+        "command": "conversation-load-check",
+        "provider": PROVIDER_NAME,
+        "implementation": IMPLEMENTATION,
+        "mode": MODE,
+        "phase": "phase2d-conversation-load-check-dev",
+        "private_material_included": false,
+        "error": {
+            "code": "conversation_missing",
+            "message": err.to_string()
+        },
+        "data": {
+            "device_label": device_label,
+            "conversation_label": conversation_label,
+            "provider_storage_loaded": false,
+            "group_reloadable": false
+        },
+        "events": [
+            {
+                "event": "provider.conversation.missing",
+                "severity": "warning",
+                "trust_relevant": false
+            }
+        ],
+        "warnings": [
+            "conversation summary or provider storage is missing",
+            "no private material printed"
+        ]
+    });
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&envelope).expect("provider envelope JSON should serialize")
+    );
+}
+
+fn print_conversation_load_check_unavailable(
+    device_label: &str,
+    conversation_label: &str,
+    err: &io::Error,
+) {
+    let envelope = serde_json::json!({
+        "ok": false,
+        "command": "conversation-load-check",
+        "provider": PROVIDER_NAME,
+        "implementation": IMPLEMENTATION,
+        "mode": MODE,
+        "phase": "phase2d-conversation-load-check-dev",
+        "private_material_included": false,
+        "error": {
+            "code": "provider_storage_unavailable",
+            "message": err.to_string()
+        },
+        "data": {
+            "device_label": device_label,
+            "conversation_label": conversation_label,
+            "provider_storage_loaded": false,
+            "group_reloadable": false
+        },
+        "events": [
+            {
+                "event": "storage.corrupt",
+                "severity": "warning",
+                "trust_relevant": false
+            }
+        ],
+        "warnings": [
+            "provider storage could not be loaded or did not contain a reloadable group",
+            "no private material printed"
+        ]
+    });
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&envelope).expect("provider envelope JSON should serialize")
+    );
+}
 fn print_conversation_create_identity_missing(device_label: &str, conversation_label: &str) {
     print_conversation_create_failure_common(
         device_label,
@@ -532,7 +786,8 @@ fn print_provider_info() {
       "identity-create",
     "identity-status",
     "public-bundle-export",
-    "conversation-create"
+    "conversation-create",
+    "conversation-load-check"
     ],
     "unsupported": [
     "conversation-add-member",

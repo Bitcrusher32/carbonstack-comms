@@ -45,6 +45,8 @@ type openMLSSidecarProviderData struct {
 	PublicSignatureKeyLen        int      `json:"public_signature_key_len"`
 	ManifestPathHint             string   `json:"manifest_path_hint"`
 	ProviderStorageWritten       bool     `json:"provider_storage_written"`
+	ProviderStorageLoaded        bool     `json:"provider_storage_loaded"`
+	ProviderStoragePathHint      string   `json:"provider_storage_path_hint"`
 	GroupReloadable              bool     `json:"group_reloadable"`
 	ConversationLabel            string   `json:"conversation_label"`
 	ConversationCreated          bool     `json:"conversation_created"`
@@ -114,6 +116,7 @@ func TestOpenMLSSidecarProviderInfoCommand(t *testing.T) {
 	assertStringPresent(t, envelope.Data.Capabilities, "identity-status")
 	assertStringPresent(t, envelope.Data.Capabilities, "public-bundle-export")
 	assertStringPresent(t, envelope.Data.Capabilities, "conversation-create")
+	assertStringPresent(t, envelope.Data.Capabilities, "conversation-load-check")
 	unsupported := []string{
 		"conversation-add-member",
 		"conversation-join",
@@ -302,6 +305,8 @@ func TestOpenMLSSidecarIdentityCreateWritesDevIdentityState(t *testing.T) {
 		KeyPackageCreated           bool   `json:"key_package_created"`
 		PublicBundleAvailable       bool   `json:"public_bundle_available"`
 		ProviderStorageWritten      bool   `json:"provider_storage_written"`
+		ProviderStorageLoaded       bool   `json:"provider_storage_loaded"`
+		ProviderStoragePathHint     string `json:"provider_storage_path_hint"`
 		GroupReloadable             bool   `json:"group_reloadable"`
 		ConversationLabel           string `json:"conversation_label"`
 		ConversationCreated         bool   `json:"conversation_created"`
@@ -363,6 +368,8 @@ func TestOpenMLSSidecarIdentityCreateWritesDevIdentityState(t *testing.T) {
 		IdentityCreated             bool   `json:"identity_created"`
 		SignerFile                  string `json:"signer_file"`
 		ProviderStorageWritten      bool   `json:"provider_storage_written"`
+		ProviderStorageLoaded       bool   `json:"provider_storage_loaded"`
+		ProviderStoragePathHint     string `json:"provider_storage_path_hint"`
 		GroupReloadable             bool   `json:"group_reloadable"`
 		ConversationLabel           string `json:"conversation_label"`
 		ConversationCreated         bool   `json:"conversation_created"`
@@ -702,6 +709,8 @@ func TestOpenMLSSidecarPublicBundleExportCreatesSummary(t *testing.T) {
 		PublicBundleManifestPathHint string `json:"public_bundle_manifest_path_hint"`
 		PublicBundleAvailable        bool   `json:"public_bundle_available"`
 		ProviderStorageWritten       bool   `json:"provider_storage_written"`
+		ProviderStorageLoaded        bool   `json:"provider_storage_loaded"`
+		ProviderStoragePathHint      string `json:"provider_storage_path_hint"`
 		GroupReloadable              bool   `json:"group_reloadable"`
 		ConversationLabel            string `json:"conversation_label"`
 		ConversationCreated          bool   `json:"conversation_created"`
@@ -894,6 +903,8 @@ func TestOpenMLSSidecarPublicBundleExportWritesArtifact(t *testing.T) {
 		PublicBundleManifestPath    string `json:"public_bundle_manifest_path"`
 		PublicBundleAvailable       bool   `json:"public_bundle_available"`
 		ProviderStorageWritten      bool   `json:"provider_storage_written"`
+		ProviderStorageLoaded       bool   `json:"provider_storage_loaded"`
+		ProviderStoragePathHint     string `json:"provider_storage_path_hint"`
 		GroupReloadable             bool   `json:"group_reloadable"`
 		ConversationLabel           string `json:"conversation_label"`
 		ConversationCreated         bool   `json:"conversation_created"`
@@ -973,6 +984,8 @@ func TestOpenMLSSidecarPublicBundleExportWritesArtifact(t *testing.T) {
 		KeyPackageArtifactSHA256    string `json:"key_package_artifact_sha256"`
 		KeyPackageArtifactSizeBytes int    `json:"key_package_artifact_size_bytes"`
 		ProviderStorageWritten      bool   `json:"provider_storage_written"`
+		ProviderStorageLoaded       bool   `json:"provider_storage_loaded"`
+		ProviderStoragePathHint     string `json:"provider_storage_path_hint"`
 		GroupReloadable             bool   `json:"group_reloadable"`
 		ConversationLabel           string `json:"conversation_label"`
 		ConversationCreated         bool   `json:"conversation_created"`
@@ -1147,12 +1160,16 @@ func TestOpenMLSSidecarConversationCreate(t *testing.T) {
 	if conversationEnvelope.Data.Epoch == "" {
 		t.Fatal("conversation-create should return epoch")
 	}
-	if conversationEnvelope.Data.ProviderStorageWritten {
-		t.Fatal("conversation-create must not claim provider_storage_written=true until reloadable provider/group persistence exists")
+	if !conversationEnvelope.Data.ProviderStorageWritten {
+		t.Fatal("conversation-create should report provider_storage_written=true after dev provider storage persistence repair")
 	}
 
-	if conversationEnvelope.Data.GroupReloadable {
-		t.Fatal("conversation-create must not claim group_reloadable=true until MlsGroup::load succeeds across sidecar invocations")
+	if conversationEnvelope.Data.ProviderStoragePathHint == "" {
+		t.Fatal("conversation-create should return provider storage path hint")
+	}
+
+	if !conversationEnvelope.Data.GroupReloadable {
+		t.Fatal("conversation-create should report group_reloadable=true after MlsGroup::load proof")
 	}
 
 	if len(conversationEnvelope.Events) != 1 {
@@ -1171,9 +1188,11 @@ func TestOpenMLSSidecarConversationCreate(t *testing.T) {
 
 	stateDir := filepath.Join(openMLSSidecarDir, ".carbonstack-openmls-sidecar-state", "dev", "conversations", "carbonstack-test-conversation")
 	conversationSummaryPath := filepath.Join(stateDir, "conversation-summary.json")
+	providerStoragePath := filepath.Join(stateDir, "provider-storage.json")
 	signerPath := filepath.Join(openMLSSidecarDir, ".carbonstack-openmls-sidecar-state", "dev", "devices", "carbonstack-alice-device", "signer.json")
 
 	assertFileExists(t, conversationSummaryPath)
+	assertFileExists(t, providerStoragePath)
 	assertFileExists(t, signerPath)
 
 	var summary struct {
@@ -1189,6 +1208,7 @@ func TestOpenMLSSidecarConversationCreate(t *testing.T) {
 		ConversationCreated     bool   `json:"conversation_created"`
 		ProviderStorageWritten  bool   `json:"provider_storage_written"`
 		GroupReloadable         bool   `json:"group_reloadable"`
+		ProviderStorageFile     string `json:"provider_storage_file"`
 		PrivateMaterialIncluded bool   `json:"private_material_included"`
 	}
 
@@ -1225,12 +1245,16 @@ func TestOpenMLSSidecarConversationCreate(t *testing.T) {
 	if !summary.ConversationCreated {
 		t.Fatal("summary should report conversation_created=true")
 	}
-	if summary.ProviderStorageWritten {
-		t.Fatal("summary must not claim provider_storage_written=true until reloadable provider/group persistence exists")
+	if !summary.ProviderStorageWritten {
+		t.Fatal("summary should report provider_storage_written=true after dev provider storage persistence repair")
 	}
 
-	if summary.GroupReloadable {
-		t.Fatal("summary must not claim group_reloadable=true until MlsGroup::load succeeds across sidecar invocations")
+	if !summary.GroupReloadable {
+		t.Fatal("summary should report group_reloadable=true after MlsGroup::load proof")
+	}
+
+	if summary.ProviderStorageFile != "provider-storage.json" {
+		t.Fatalf("summary provider storage file = %q, want provider-storage.json", summary.ProviderStorageFile)
 	}
 
 	if summary.PrivateMaterialIncluded {
@@ -1260,6 +1284,96 @@ func TestOpenMLSSidecarConversationCreate(t *testing.T) {
 
 	assertSidecarError(t, invalidEnvelope, "invalid_conversation_label", string(ProviderEventCommandInvalid), "warning", false)
 	assertNoSecretMaterialInStdout(t, invalidOutput)
+}
+
+func TestOpenMLSSidecarConversationLoadCheck(t *testing.T) {
+	removeOpenMLSSidecarState(t)
+
+	missingOutput, missingErr := runOpenMLSSidecar("conversation-load-check", "--device-label", "carbonstack-alice-device", "--conversation-label", "carbonstack-test-conversation")
+	assertExitCode(t, missingErr, 3)
+
+	missingEnvelope := parseSidecarEnvelope(t, missingOutput)
+	if missingEnvelope.OK {
+		t.Fatal("missing conversation-load-check envelope ok = true, want false")
+	}
+	assertNoSecretMaterialInStdout(t, missingOutput)
+
+	identityOutput, identityErr := runOpenMLSSidecar("identity-create", "--device-label", "carbonstack-alice-device")
+	if identityErr != nil {
+		t.Fatalf("identity-create failed: %v\n%s", identityErr, string(identityOutput))
+	}
+
+	conversationOutput, conversationErr := runOpenMLSSidecar("conversation-create", "--device-label", "carbonstack-alice-device", "--conversation-label", "carbonstack-test-conversation")
+	if conversationErr != nil {
+		t.Fatalf("conversation-create failed: %v\n%s", conversationErr, string(conversationOutput))
+	}
+
+	loadOutput, loadErr := runOpenMLSSidecar("conversation-load-check", "--device-label", "carbonstack-alice-device", "--conversation-label", "carbonstack-test-conversation")
+	if loadErr != nil {
+		t.Fatalf("conversation-load-check failed: %v\n%s", loadErr, string(loadOutput))
+	}
+
+	loadEnvelope := parseSidecarEnvelope(t, loadOutput)
+
+	if !loadEnvelope.OK {
+		t.Fatal("conversation-load-check envelope ok = false, want true")
+	}
+
+	if loadEnvelope.Command != "conversation-load-check" {
+		t.Fatalf("command = %q, want conversation-load-check", loadEnvelope.Command)
+	}
+
+	assertProviderEnvelopeBase(t, loadEnvelope)
+
+	if loadEnvelope.Phase != "phase2d-conversation-load-check-dev" {
+		t.Fatalf("phase = %q, want phase2d-conversation-load-check-dev", loadEnvelope.Phase)
+	}
+
+	if loadEnvelope.PrivateMaterialIncluded {
+		t.Fatal("conversation-load-check must not include private material")
+	}
+
+	if loadEnvelope.Data.DeviceLabel != "carbonstack-alice-device" {
+		t.Fatalf("device label = %q, want carbonstack-alice-device", loadEnvelope.Data.DeviceLabel)
+	}
+
+	if loadEnvelope.Data.ConversationLabel != "carbonstack-test-conversation" {
+		t.Fatalf("conversation label = %q, want carbonstack-test-conversation", loadEnvelope.Data.ConversationLabel)
+	}
+
+	if loadEnvelope.Data.ProviderStoragePathHint == "" {
+		t.Fatal("conversation-load-check should return provider storage path hint")
+	}
+
+	if !loadEnvelope.Data.ProviderStorageLoaded {
+		t.Fatal("conversation-load-check should report provider_storage_loaded=true")
+	}
+
+	if !loadEnvelope.Data.GroupReloadable {
+		t.Fatal("conversation-load-check should report group_reloadable=true")
+	}
+
+	if loadEnvelope.Data.MemberCount != 1 {
+		t.Fatalf("member count = %d, want 1", loadEnvelope.Data.MemberCount)
+	}
+
+	if loadEnvelope.Data.Epoch == "" {
+		t.Fatal("conversation-load-check should return epoch")
+	}
+
+	if len(loadEnvelope.Events) != 1 {
+		t.Fatalf("conversation-load-check event count = %d, want 1", len(loadEnvelope.Events))
+	}
+
+	if loadEnvelope.Events[0].Event != string(ProviderEventConversationLoaded) {
+		t.Fatalf("conversation-load-check event = %q, want %q", loadEnvelope.Events[0].Event, ProviderEventConversationLoaded)
+	}
+
+	if loadEnvelope.Events[0].TrustRelevant {
+		t.Fatal("conversation-load-check event should not be trust relevant")
+	}
+
+	assertNoSecretMaterialInStdout(t, loadOutput)
 }
 func runOpenMLSSidecar(args ...string) ([]byte, error) {
 	sidecarDir := filepath.Clean(openMLSSidecarDir)

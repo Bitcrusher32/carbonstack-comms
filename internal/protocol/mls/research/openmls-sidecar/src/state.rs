@@ -1,3 +1,4 @@
+﻿use crate::provider::CarbonStackSidecarProvider;
 use openmls::prelude::*;
 use openmls_basic_credential::SignatureKeyPair;
 use serde::{Deserialize, Serialize};
@@ -111,6 +112,10 @@ pub fn conversation_state_dir(conversation_label: &str) -> PathBuf {
 
 pub fn conversation_summary_path(conversation_label: &str) -> PathBuf {
     conversation_state_dir(conversation_label).join("conversation-summary.json")
+}
+
+pub fn conversation_provider_storage_path(conversation_label: &str) -> PathBuf {
+    conversation_state_dir(conversation_label).join("provider-storage.json")
 }
 
 pub fn create_dev_identity(device_label: &str) -> io::Result<IdentityCreateResult> {
@@ -403,7 +408,7 @@ pub fn export_dev_public_bundle_summary(
         signature_key: signer.to_public_vec().into(),
     };
 
-    let provider = openmls_rust_crypto::OpenMlsRustCrypto::default();
+    let provider = CarbonStackSidecarProvider::default();
 
     let key_package_bundle = KeyPackage::builder()
         .build(ciphersuite, &provider, &signer, credential_with_key)
@@ -604,6 +609,7 @@ pub struct ConversationCreateResult {
     pub conversation_label: String,
     pub conversation_state_dir: PathBuf,
     pub conversation_summary_path: PathBuf,
+    pub provider_storage_path: PathBuf,
     pub group_id_ref: String,
     pub group_id_len: usize,
     pub member_count: usize,
@@ -626,6 +632,7 @@ struct ConversationSummary<'a> {
     conversation_created: bool,
     provider_storage_written: bool,
     group_reloadable: bool,
+    provider_storage_file: &'a str,
     private_material_included: bool,
     warning: &'a str,
 }
@@ -638,8 +645,9 @@ pub fn create_dev_conversation(
 
     let conversation_state_dir = conversation_state_dir(conversation_label);
     let conversation_summary_path = conversation_summary_path(conversation_label);
+    let provider_storage_path = conversation_provider_storage_path(conversation_label);
 
-    if conversation_summary_path.exists() {
+    if conversation_summary_path.exists() || provider_storage_path.exists() {
         return Err(io::Error::new(
             io::ErrorKind::AlreadyExists,
             "conversation state already exists",
@@ -661,7 +669,7 @@ pub fn create_dev_conversation(
         signature_key: signer.to_public_vec().into(),
     };
 
-    let provider = openmls_rust_crypto::OpenMlsRustCrypto::default();
+    let provider = CarbonStackSidecarProvider::default();
 
     let create_config = MlsGroupCreateConfig::builder()
         .ciphersuite(ciphersuite)
@@ -671,11 +679,11 @@ pub fn create_dev_conversation(
     let group_id_bytes = format!("carbonstack-openmls-dev-conversation:{conversation_label}");
     let group_id = GroupId::from_slice(group_id_bytes.as_bytes());
 
-    let group = MlsGroup::new_with_group_id(
+    let _group = MlsGroup::new_with_group_id(
         &provider,
         &signer,
         &create_config,
-        group_id,
+        group_id.clone(),
         credential_with_key,
     )
     .map_err(|err| {
@@ -685,10 +693,29 @@ pub fn create_dev_conversation(
         )
     })?;
 
+    provider.save_storage_to_path(&provider_storage_path)?;
+
+    let mut reloaded_provider = CarbonStackSidecarProvider::default();
+    reloaded_provider.load_storage_from_path(&provider_storage_path)?;
+
+    let reloaded_group = MlsGroup::load(reloaded_provider.storage(), &group_id)
+        .map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("conversation group reload failed: {err:?}"),
+            )
+        })?
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "conversation group not found after provider storage reload",
+            )
+        })?;
+
     let group_id_digest = Sha256::digest(group_id_bytes.as_bytes());
     let group_id_ref = format!("sha256:{}", hex::encode(group_id_digest));
-    let epoch = format!("{:?}", group.epoch());
-    let member_count = group.members().count();
+    let epoch = format!("{:?}", reloaded_group.epoch());
+    let member_count = reloaded_group.members().count();
 
     write_json_file(
         &conversation_summary_path,
@@ -703,10 +730,11 @@ pub fn create_dev_conversation(
             member_count,
             epoch: &epoch,
             conversation_created: true,
-            provider_storage_written: false,
-            group_reloadable: false,
+            provider_storage_written: true,
+            group_reloadable: true,
+            provider_storage_file: "provider-storage.json",
             private_material_included: false,
-            warning: "dev-only OpenMLS conversation summary; group is not reloadable across sidecar process invocations yet; not production messaging or secure vault storage",
+            warning: "dev-only OpenMLS conversation summary with reloadable dev provider storage; not production messaging or secure vault storage",
         },
     )?;
 
@@ -715,11 +743,89 @@ pub fn create_dev_conversation(
         conversation_label: conversation_label.to_string(),
         conversation_state_dir,
         conversation_summary_path,
+        provider_storage_path,
         group_id_ref,
         group_id_len: group_id_bytes.as_bytes().len(),
         member_count,
         epoch,
-        provider_storage_written: false,
-        group_reloadable: false,
+        provider_storage_written: true,
+        group_reloadable: true,
+    })
+}
+
+#[derive(Debug, Clone)]
+pub struct ConversationLoadCheckResult {
+    pub device_label: String,
+    pub conversation_label: String,
+    pub conversation_state_dir: PathBuf,
+    pub conversation_summary_path: PathBuf,
+    pub provider_storage_path: PathBuf,
+    pub group_id_ref: String,
+    pub group_id_len: usize,
+    pub member_count: usize,
+    pub epoch: String,
+    pub provider_storage_loaded: bool,
+    pub group_reloadable: bool,
+}
+
+pub fn load_dev_conversation_status(
+    device_label: &str,
+    conversation_label: &str,
+) -> io::Result<ConversationLoadCheckResult> {
+    let _status = load_dev_identity_status(device_label)?;
+
+    let conversation_state_dir = conversation_state_dir(conversation_label);
+    let conversation_summary_path = conversation_summary_path(conversation_label);
+    let provider_storage_path = conversation_provider_storage_path(conversation_label);
+
+    if !conversation_summary_path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "conversation summary is missing",
+        ));
+    }
+
+    if !provider_storage_path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "conversation provider storage is missing",
+        ));
+    }
+
+    let group_id_bytes = format!("carbonstack-openmls-dev-conversation:{conversation_label}");
+    let group_id = GroupId::from_slice(group_id_bytes.as_bytes());
+
+    let mut provider = CarbonStackSidecarProvider::default();
+    provider.load_storage_from_path(&provider_storage_path)?;
+
+    let group = MlsGroup::load(provider.storage(), &group_id)
+        .map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("conversation group reload failed: {err:?}"),
+            )
+        })?
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "conversation group not found in provider storage",
+            )
+        })?;
+
+    let group_id_digest = Sha256::digest(group_id_bytes.as_bytes());
+    let group_id_ref = format!("sha256:{}", hex::encode(group_id_digest));
+
+    Ok(ConversationLoadCheckResult {
+        device_label: device_label.to_string(),
+        conversation_label: conversation_label.to_string(),
+        conversation_state_dir,
+        conversation_summary_path,
+        provider_storage_path,
+        group_id_ref,
+        group_id_len: group_id_bytes.as_bytes().len(),
+        member_count: group.members().count(),
+        epoch: format!("{:?}", group.epoch()),
+        provider_storage_loaded: true,
+        group_reloadable: true,
     })
 }
