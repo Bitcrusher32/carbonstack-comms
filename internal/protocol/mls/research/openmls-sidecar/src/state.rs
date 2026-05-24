@@ -5,6 +5,7 @@ use sha2::{Digest, Sha256};
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
+use tls_codec::Serialize as TlsSerializeTrait;
 
 pub const STATE_ROOT: &str = ".carbonstack-openmls-sidecar-state";
 pub const DEV_SCOPE: &str = "dev";
@@ -310,6 +311,12 @@ pub struct PublicBundleExportResult {
     pub public_signature_key_len: usize,
     pub key_package_ref: String,
     pub key_package_hash_len: usize,
+    pub key_package_artifact_written: bool,
+    pub key_package_artifact_path: Option<String>,
+    pub key_package_artifact_sha256: Option<String>,
+    pub key_package_artifact_size_bytes: Option<usize>,
+    pub public_bundle_manifest_written: bool,
+    pub public_bundle_manifest_path: Option<String>,
     pub provider_storage_written: bool,
 }
 
@@ -325,7 +332,31 @@ struct PublicBundleSummary<'a> {
     key_package_ref: &'a str,
     key_package_hash_len: usize,
     key_package_artifact_written: bool,
+    key_package_artifact_path: Option<&'a str>,
+    key_package_artifact_sha256: Option<&'a str>,
+    key_package_artifact_size_bytes: Option<usize>,
+    public_bundle_manifest_written: bool,
+    public_bundle_manifest_path: Option<&'a str>,
     public_bundle_available: bool,
+    provider_storage_written: bool,
+    private_material_included: bool,
+    warning: &'a str,
+}
+
+#[derive(Serialize)]
+struct PublicBundleManifest<'a> {
+    manifest_version: &'a str,
+    device_label: &'a str,
+    state_scope: &'a str,
+    ciphersuite: &'a str,
+    credential_type: &'a str,
+    public_identity_ref: &'a str,
+    public_signature_key_len: usize,
+    key_package_ref: &'a str,
+    key_package_hash_len: usize,
+    key_package_artifact: &'a str,
+    key_package_artifact_sha256: &'a str,
+    key_package_artifact_size_bytes: usize,
     provider_storage_written: bool,
     private_material_included: bool,
     warning: &'a str,
@@ -335,8 +366,17 @@ pub fn public_bundle_summary_path(device_label: &str) -> PathBuf {
     device_state_dir(device_label).join("public-bundle-summary.json")
 }
 
+pub fn public_bundle_keypackage_artifact_path(device_label: &str) -> PathBuf {
+    device_state_dir(device_label).join("public-bundle.keypackage.bin")
+}
+
+pub fn public_bundle_manifest_path(device_label: &str) -> PathBuf {
+    device_state_dir(device_label).join("public-bundle-manifest.json")
+}
+
 pub fn export_dev_public_bundle_summary(
     device_label: &str,
+    write_artifact: bool,
 ) -> io::Result<PublicBundleExportResult> {
     let status = load_dev_identity_status(device_label)?;
 
@@ -377,6 +417,85 @@ pub fn export_dev_public_bundle_summary(
     let key_package_ref = format!("sha256:{}", hex::encode(key_package_hash_bytes));
 
     let public_bundle_summary_path = public_bundle_summary_path(device_label);
+    let key_package_artifact_path = public_bundle_keypackage_artifact_path(device_label);
+    let public_bundle_manifest_path = public_bundle_manifest_path(device_label);
+
+    let mut key_package_artifact_written = false;
+    let mut public_bundle_manifest_written = false;
+    let mut key_package_artifact_sha256: Option<String> = None;
+    let mut key_package_artifact_size_bytes: Option<usize> = None;
+    let mut key_package_artifact_path_string: Option<String> = None;
+    let mut public_bundle_manifest_path_string: Option<String> = None;
+
+    if write_artifact {
+        if key_package_artifact_path.exists() {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                format!(
+                    "KeyPackage artifact already exists: {}",
+                    key_package_artifact_path.display()
+                ),
+            ));
+        }
+
+        if public_bundle_manifest_path.exists() {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                format!(
+                    "public bundle manifest already exists: {}",
+                    public_bundle_manifest_path.display()
+                ),
+            ));
+        }
+
+        let key_package_bytes = key_package.tls_serialize_detached().map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("key package TLS serialization failed: {err:?}"),
+            )
+        })?;
+
+        let artifact_digest = Sha256::digest(&key_package_bytes);
+        let artifact_sha256 = format!("sha256:{}", hex::encode(artifact_digest));
+        let artifact_size = key_package_bytes.len();
+
+        fs::write(&key_package_artifact_path, &key_package_bytes)?;
+
+        let artifact_file_name = "public-bundle.keypackage.bin";
+        let manifest_file_name = "public-bundle-manifest.json";
+
+        write_json_file(
+            &public_bundle_manifest_path,
+            &PublicBundleManifest {
+                manifest_version: "public-bundle-manifest/v0",
+                device_label,
+                state_scope: "dev-local-sidecar-state",
+                ciphersuite: CIPHERSUITE_LABEL,
+                credential_type: "BasicCredential",
+                public_identity_ref: &status.public_identity_ref,
+                public_signature_key_len: status.public_signature_key_len,
+                key_package_ref: &key_package_ref,
+                key_package_hash_len: key_package_hash_bytes.len(),
+                key_package_artifact: artifact_file_name,
+                key_package_artifact_sha256: &artifact_sha256,
+                key_package_artifact_size_bytes: artifact_size,
+                provider_storage_written: false,
+                private_material_included: false,
+                warning: "dev-only serialized public KeyPackage artifact; not final CarbonStack onboarding material",
+            },
+        )?;
+
+        key_package_artifact_written = true;
+        public_bundle_manifest_written = true;
+        key_package_artifact_sha256 = Some(artifact_sha256);
+        key_package_artifact_size_bytes = Some(artifact_size);
+        key_package_artifact_path_string =
+            Some(key_package_artifact_path.to_string_lossy().to_string());
+        public_bundle_manifest_path_string =
+            Some(public_bundle_manifest_path.to_string_lossy().to_string());
+
+        let _ = manifest_file_name;
+    }
 
     write_json_file(
         &public_bundle_summary_path,
@@ -390,11 +509,20 @@ pub fn export_dev_public_bundle_summary(
             key_package_created: true,
             key_package_ref: &key_package_ref,
             key_package_hash_len: key_package_hash_bytes.len(),
-            key_package_artifact_written: false,
+            key_package_artifact_written,
+            key_package_artifact_path: key_package_artifact_path_string.as_deref(),
+            key_package_artifact_sha256: key_package_artifact_sha256.as_deref(),
+            key_package_artifact_size_bytes,
+            public_bundle_manifest_written,
+            public_bundle_manifest_path: public_bundle_manifest_path_string.as_deref(),
             public_bundle_available: true,
             provider_storage_written: false,
             private_material_included: false,
-            warning: "dev-only public bundle summary; full serialized KeyPackage artifact is not exported in this rung",
+            warning: if write_artifact {
+                "dev-only public bundle summary with serialized public KeyPackage artifact; not final CarbonStack onboarding material"
+            } else {
+                "dev-only public bundle summary; full serialized KeyPackage artifact is not exported in this rung"
+            },
         },
     )?;
 
@@ -406,6 +534,12 @@ pub fn export_dev_public_bundle_summary(
         public_signature_key_len: status.public_signature_key_len,
         key_package_ref,
         key_package_hash_len: key_package_hash_bytes.len(),
+        key_package_artifact_written,
+        key_package_artifact_path: key_package_artifact_path_string,
+        key_package_artifact_sha256,
+        key_package_artifact_size_bytes,
+        public_bundle_manifest_written,
+        public_bundle_manifest_path: public_bundle_manifest_path_string,
         provider_storage_written: false,
     })
 }

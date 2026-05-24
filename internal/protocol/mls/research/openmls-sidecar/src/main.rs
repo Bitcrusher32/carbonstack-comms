@@ -133,7 +133,9 @@ fn handle_public_bundle_export(args: &[String]) {
         std::process::exit(2);
     }
 
-    match export_dev_public_bundle_summary(device_label) {
+    let write_artifact = args.iter().any(|arg| arg == "--write-artifact");
+
+    match export_dev_public_bundle_summary(device_label, write_artifact) {
         Ok(result) => {
             print_public_bundle_export_success(&result);
         }
@@ -333,7 +335,12 @@ fn print_public_bundle_export_success(result: &PublicBundleExportResult) {
             "public_bundle_exported": true,
             "public_bundle_available": true,
             "key_package_created": true,
-            "key_package_artifact_written": false,
+            "key_package_artifact_written": result.key_package_artifact_written,
+            "key_package_artifact_path_hint": result.key_package_artifact_path,
+            "key_package_artifact_sha256": result.key_package_artifact_sha256,
+            "key_package_artifact_size_bytes": result.key_package_artifact_size_bytes,
+            "public_bundle_manifest_written": result.public_bundle_manifest_written,
+            "public_bundle_manifest_path_hint": result.public_bundle_manifest_path,
             "state_scope": "dev-local-sidecar-state",
             "state_path_hint": result.state_dir.to_string_lossy(),
             "public_bundle_summary_path_hint": result.public_bundle_summary_path.to_string_lossy(),
@@ -352,7 +359,11 @@ fn print_public_bundle_export_success(result: &PublicBundleExportResult) {
         ],
         "warnings": [
             "dev-only public bundle summary; not production onboarding material",
-            "full serialized KeyPackage artifact is not exported in this rung",
+            if result.key_package_artifact_written {
+                "serialized public KeyPackage artifact was written under ignored dev state"
+            } else {
+                "full serialized KeyPackage artifact is not exported in this rung"
+            },
             "private material was loaded locally but not printed",
             "OpenMLS is not wired into CarbonStackComms",
             "conversation lifecycle is not implemented"
