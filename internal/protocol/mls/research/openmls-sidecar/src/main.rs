@@ -1,10 +1,11 @@
 mod labels;
 mod state;
 
-use labels::validate_device_label;
+use labels::{validate_conversation_label, validate_device_label};
 use state::{
-    IdentityCreateResult, IdentityStatusResult, PublicBundleExportResult, create_dev_identity,
-    device_state_dir, export_dev_public_bundle_summary, load_dev_identity_status,
+    ConversationCreateResult, IdentityCreateResult, IdentityStatusResult, PublicBundleExportResult,
+    create_dev_conversation, create_dev_identity, device_state_dir,
+    export_dev_public_bundle_summary, load_dev_identity_status,
 };
 use std::env;
 use std::io;
@@ -16,6 +17,7 @@ const PHASE_PROVIDER_INFO: &str = "phase2d-provider-info";
 const PHASE_IDENTITY_CREATE: &str = "phase2d-identity-create-dev";
 const PHASE_IDENTITY_STATUS: &str = "phase2d-identity-status-dev";
 const PHASE_PUBLIC_BUNDLE_EXPORT: &str = "phase2d-public-bundle-export-dev";
+const PHASE_CONVERSATION_CREATE: &str = "phase2d-conversation-create-dev";
 
 const WARNINGS: [&str; 4] = [
     "OpenMLS is not wired into CarbonStackComms",
@@ -25,7 +27,6 @@ const WARNINGS: [&str; 4] = [
 ];
 
 const UNSUPPORTED_COMMANDS: &[&str] = &[
-    "conversation-create",
     "conversation-add-member",
     "conversation-join",
     "message-protect",
@@ -42,6 +43,7 @@ fn main() {
         Some("identity-create") => handle_identity_create(&args[2..]),
         Some("identity-status") => handle_identity_status(&args[2..]),
         Some("public-bundle-export") => handle_public_bundle_export(&args[2..]),
+        Some("conversation-create") => handle_conversation_create(&args[2..]),
         Some("--help") | Some("-h") | None => print_help(),
         Some(other) => {
             print_unsupported_command(other);
@@ -153,6 +155,351 @@ fn handle_public_bundle_export(args: &[String]) {
         }
     }
 }
+
+fn parse_conversation_label(args: &[String]) -> Option<&str> {
+    let mut index = 0;
+
+    while index < args.len() {
+        if args[index] == "--conversation-label" {
+            return args.get(index + 1).map(String::as_str);
+        }
+
+        index += 1;
+    }
+
+    None
+}
+
+fn handle_conversation_create(args: &[String]) {
+    let Some(device_label) = parse_device_label(args) else {
+        print_conversation_create_missing_device_label();
+        std::process::exit(2);
+    };
+
+    let Some(conversation_label) = parse_conversation_label(args) else {
+        print_conversation_create_missing_conversation_label(device_label);
+        std::process::exit(2);
+    };
+
+    if let Err(reason) = validate_device_label(device_label) {
+        print_conversation_create_invalid_device_label(device_label, &reason);
+        std::process::exit(2);
+    }
+
+    if let Err(reason) = validate_conversation_label(conversation_label) {
+        print_conversation_create_invalid_conversation_label(
+            device_label,
+            conversation_label,
+            &reason,
+        );
+        std::process::exit(2);
+    }
+
+    match create_dev_conversation(device_label, conversation_label) {
+        Ok(result) => {
+            print_conversation_create_success(&result);
+        }
+        Err(err) if err.kind() == io::ErrorKind::NotFound => {
+            print_conversation_create_identity_missing(device_label, conversation_label);
+            std::process::exit(3);
+        }
+        Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
+            print_conversation_create_already_exists(device_label, conversation_label);
+            std::process::exit(3);
+        }
+        Err(err) if err.kind() == io::ErrorKind::InvalidData => {
+            print_conversation_create_secret_material_unavailable(
+                device_label,
+                conversation_label,
+                &err.to_string(),
+            );
+            std::process::exit(4);
+        }
+        Err(err) => {
+            print_conversation_create_failed(device_label, conversation_label, &err.to_string());
+            std::process::exit(4);
+        }
+    }
+}
+
+fn print_conversation_create_success(result: &ConversationCreateResult) {
+    let envelope = serde_json::json!({
+        "ok": true,
+        "command": "conversation-create",
+        "provider": PROVIDER_NAME,
+        "implementation": IMPLEMENTATION,
+        "mode": MODE,
+        "phase": PHASE_CONVERSATION_CREATE,
+        "data": {
+            "device_label": result.device_label,
+            "conversation_label": result.conversation_label,
+            "identity_exists": true,
+            "identity_loadable": true,
+            "conversation_created": true,
+            "state_scope": "dev-local-sidecar-state",
+            "conversation_state_path_hint": result.conversation_state_dir.to_string_lossy(),
+            "conversation_summary_path_hint": result.conversation_summary_path.to_string_lossy(),
+            "ciphersuite": "MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519",
+            "group_id_ref": result.group_id_ref,
+            "group_id_len": result.group_id_len,
+            "member_count": result.member_count,
+            "epoch": result.epoch,
+            "provider_storage_written": result.provider_storage_written
+        },
+        "events": [
+            {
+                "event": "provider.conversation.created",
+                "severity": "info",
+                "trust_relevant": false
+            }
+        ],
+        "warnings": [
+            "dev-only OpenMLS conversation state; not production messaging",
+            "private material was loaded locally but not printed",
+            "conversation-add-member is not implemented",
+            "conversation-join is not implemented",
+            "message protect/open is not implemented"
+        ],
+        "private_material_included": false
+    });
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&envelope)
+            .expect("failed to serialize conversation-create success envelope")
+    );
+}
+
+fn print_conversation_create_missing_device_label() {
+    println!(
+        r#"{{
+  "ok": false,
+  "command": "conversation-create",
+  "provider": "{provider}",
+  "implementation": "{implementation}",
+  "mode": "{mode}",
+  "phase": "{phase}",
+  "error": {{
+    "code": "missing_required_argument",
+    "message": "conversation-create requires --device-label <label>",
+    "provider_event": "provider.command.invalid",
+    "severity": "warning",
+    "trust_relevant": false
+  }},
+  "events": [
+    {{
+      "event": "provider.command.invalid",
+      "severity": "warning",
+      "trust_relevant": false
+    }}
+  ],
+  "warnings": [],
+  "private_material_included": false
+}}"#,
+        provider = PROVIDER_NAME,
+        implementation = IMPLEMENTATION,
+        mode = MODE,
+        phase = PHASE_CONVERSATION_CREATE,
+    );
+}
+
+fn print_conversation_create_missing_conversation_label(device_label: &str) {
+    println!(
+        r#"{{
+  "ok": false,
+  "command": "conversation-create",
+  "provider": "{provider}",
+  "implementation": "{implementation}",
+  "mode": "{mode}",
+  "phase": "{phase}",
+  "error": {{
+    "code": "missing_required_argument",
+    "message": "conversation-create requires --conversation-label <label>",
+    "provider_event": "provider.command.invalid",
+    "severity": "warning",
+    "trust_relevant": false
+  }},
+  "events": [
+    {{
+      "event": "provider.command.invalid",
+      "severity": "warning",
+      "trust_relevant": false
+    }}
+  ],
+  "warnings": [],
+  "private_material_included": false,
+  "data": {{
+    "device_label": "{device_label}"
+  }}
+}}"#,
+        provider = PROVIDER_NAME,
+        implementation = IMPLEMENTATION,
+        mode = MODE,
+        phase = PHASE_CONVERSATION_CREATE,
+        device_label = json_escape(device_label),
+    );
+}
+
+fn print_conversation_create_invalid_device_label(device_label: &str, reason: &str) {
+    print_conversation_create_invalid_label_common(
+        device_label,
+        "",
+        "invalid_device_label",
+        &format!("invalid device label: {reason}"),
+    );
+}
+
+fn print_conversation_create_invalid_conversation_label(
+    device_label: &str,
+    conversation_label: &str,
+    reason: &str,
+) {
+    print_conversation_create_invalid_label_common(
+        device_label,
+        conversation_label,
+        "invalid_conversation_label",
+        &format!("invalid conversation label: {reason}"),
+    );
+}
+
+fn print_conversation_create_invalid_label_common(
+    device_label: &str,
+    conversation_label: &str,
+    code: &str,
+    message: &str,
+) {
+    let envelope = serde_json::json!({
+        "ok": false,
+        "command": "conversation-create",
+        "provider": PROVIDER_NAME,
+        "implementation": IMPLEMENTATION,
+        "mode": MODE,
+        "phase": PHASE_CONVERSATION_CREATE,
+        "error": {
+            "code": code,
+            "message": message,
+            "provider_event": "provider.command.invalid",
+            "severity": "warning",
+            "trust_relevant": false
+        },
+        "events": [
+            {
+                "event": "provider.command.invalid",
+                "severity": "warning",
+                "trust_relevant": false
+            }
+        ],
+        "warnings": [],
+        "private_material_included": false,
+        "data": {
+            "device_label": device_label,
+            "conversation_label": conversation_label
+        }
+    });
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&envelope)
+            .expect("failed to serialize conversation-create invalid label envelope")
+    );
+}
+
+fn print_conversation_create_identity_missing(device_label: &str, conversation_label: &str) {
+    print_conversation_create_failure_common(
+        device_label,
+        conversation_label,
+        "identity_missing",
+        "identity state is missing",
+        "provider.identity.missing",
+        "warning",
+        false,
+    );
+}
+
+fn print_conversation_create_already_exists(device_label: &str, conversation_label: &str) {
+    print_conversation_create_failure_common(
+        device_label,
+        conversation_label,
+        "conversation_already_exists",
+        "conversation state already exists; refusing overwrite",
+        "provider.conversation.exists",
+        "warning",
+        false,
+    );
+}
+
+fn print_conversation_create_secret_material_unavailable(
+    device_label: &str,
+    conversation_label: &str,
+    reason: &str,
+) {
+    print_conversation_create_failure_common(
+        device_label,
+        conversation_label,
+        "secret_material_unavailable",
+        &format!("identity secret material is unavailable or unloadable: {reason}"),
+        "provider.secret.material.unavailable",
+        "fatal",
+        true,
+    );
+}
+
+fn print_conversation_create_failed(device_label: &str, conversation_label: &str, reason: &str) {
+    print_conversation_create_failure_common(
+        device_label,
+        conversation_label,
+        "conversation_create_failed",
+        &format!("conversation create failed: {reason}"),
+        "checkpoint.failed",
+        "warning",
+        false,
+    );
+}
+
+fn print_conversation_create_failure_common(
+    device_label: &str,
+    conversation_label: &str,
+    code: &str,
+    message: &str,
+    provider_event: &str,
+    severity: &str,
+    trust_relevant: bool,
+) {
+    let envelope = serde_json::json!({
+        "ok": false,
+        "command": "conversation-create",
+        "provider": PROVIDER_NAME,
+        "implementation": IMPLEMENTATION,
+        "mode": MODE,
+        "phase": PHASE_CONVERSATION_CREATE,
+        "error": {
+            "code": code,
+            "message": message,
+            "provider_event": provider_event,
+            "severity": severity,
+            "trust_relevant": trust_relevant
+        },
+        "events": [
+            {
+                "event": provider_event,
+                "severity": severity,
+                "trust_relevant": trust_relevant
+            }
+        ],
+        "warnings": [],
+        "private_material_included": false,
+        "data": {
+            "device_label": device_label,
+            "conversation_label": conversation_label
+        }
+    });
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&envelope)
+            .expect("failed to serialize conversation-create failure envelope")
+    );
+}
 fn parse_device_label(args: &[String]) -> Option<&str> {
     let mut index = 0;
 
@@ -180,12 +527,12 @@ fn print_provider_info() {
     "capabilities": [
       "provider-info",
       "identity-create",
-      "identity-status",
-      "public-bundle-export"
+    "identity-status",
+    "public-bundle-export",
+    "conversation-create"
     ],
     "unsupported": [
-        "conversation-create",
-      "conversation-add-member",
+    "conversation-add-member",
       "conversation-join",
       "message-protect",
       "message-open",

@@ -1,4 +1,4 @@
-use openmls::prelude::*;
+﻿use openmls::prelude::*;
 use openmls_basic_credential::SignatureKeyPair;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -101,6 +101,16 @@ pub fn identity_state_path(device_label: &str) -> PathBuf {
 
 pub fn signer_path(device_label: &str) -> PathBuf {
     device_state_dir(device_label).join("signer.json")
+}
+pub fn conversation_state_dir(conversation_label: &str) -> PathBuf {
+    Path::new(STATE_ROOT)
+        .join(DEV_SCOPE)
+        .join("conversations")
+        .join(conversation_label)
+}
+
+pub fn conversation_summary_path(conversation_label: &str) -> PathBuf {
+    conversation_state_dir(conversation_label).join("conversation-summary.json")
 }
 
 pub fn create_dev_identity(device_label: &str) -> io::Result<IdentityCreateResult> {
@@ -586,4 +596,126 @@ mod tests {
         let path = signer_path("carbonstack-alice-device");
         assert!(path.ends_with("signer.json"));
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct ConversationCreateResult {
+    pub device_label: String,
+    pub conversation_label: String,
+    pub conversation_state_dir: PathBuf,
+    pub conversation_summary_path: PathBuf,
+    pub group_id_ref: String,
+    pub group_id_len: usize,
+    pub member_count: usize,
+    pub epoch: String,
+    pub provider_storage_written: bool,
+}
+
+#[derive(Serialize)]
+struct ConversationSummary<'a> {
+    summary_version: &'a str,
+    conversation_label: &'a str,
+    creator_device_label: &'a str,
+    state_scope: &'a str,
+    ciphersuite: &'a str,
+    group_id_ref: &'a str,
+    group_id_len: usize,
+    member_count: usize,
+    epoch: &'a str,
+    conversation_created: bool,
+    provider_storage_written: bool,
+    private_material_included: bool,
+    warning: &'a str,
+}
+
+pub fn create_dev_conversation(
+    device_label: &str,
+    conversation_label: &str,
+) -> io::Result<ConversationCreateResult> {
+    let status = load_dev_identity_status(device_label)?;
+
+    let conversation_state_dir = conversation_state_dir(conversation_label);
+    let conversation_summary_path = conversation_summary_path(conversation_label);
+
+    if conversation_summary_path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "conversation state already exists",
+        ));
+    }
+
+    fs::create_dir_all(&conversation_state_dir)?;
+
+    let signer: SignatureKeyPair = read_json_file(&status.signer_path).map_err(|err| {
+        io::Error::new(io::ErrorKind::Other, format!("signer load failed: {err}"))
+    })?;
+
+    let ciphersuite = Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
+
+    let credential = BasicCredential::new(device_label.as_bytes().to_vec());
+
+    let credential_with_key = CredentialWithKey {
+        credential: credential.into(),
+        signature_key: signer.to_public_vec().into(),
+    };
+
+    let provider = openmls_rust_crypto::OpenMlsRustCrypto::default();
+
+    let create_config = MlsGroupCreateConfig::builder()
+        .ciphersuite(ciphersuite)
+        .use_ratchet_tree_extension(true)
+        .build();
+
+    let group_id_bytes = format!("carbonstack-openmls-dev-conversation:{conversation_label}");
+    let group_id = GroupId::from_slice(group_id_bytes.as_bytes());
+
+    let group = MlsGroup::new_with_group_id(
+        &provider,
+        &signer,
+        &create_config,
+        group_id,
+        credential_with_key,
+    )
+    .map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("conversation group create failed: {err:?}"),
+        )
+    })?;
+
+    let group_id_digest = Sha256::digest(group_id_bytes.as_bytes());
+    let group_id_ref = format!("sha256:{}", hex::encode(group_id_digest));
+    let epoch = format!("{:?}", group.epoch());
+    let member_count = group.members().count();
+
+    write_json_file(
+        &conversation_summary_path,
+        &ConversationSummary {
+            summary_version: "conversation-summary/v0",
+            conversation_label,
+            creator_device_label: device_label,
+            state_scope: "dev-local-sidecar-state",
+            ciphersuite: CIPHERSUITE_LABEL,
+            group_id_ref: &group_id_ref,
+            group_id_len: group_id_bytes.as_bytes().len(),
+            member_count,
+            epoch: &epoch,
+            conversation_created: true,
+            provider_storage_written: true,
+            private_material_included: false,
+            warning: "dev-only OpenMLS conversation summary; not production messaging or secure vault storage",
+        },
+    )?;
+
+    Ok(ConversationCreateResult {
+        device_label: device_label.to_string(),
+        conversation_label: conversation_label.to_string(),
+        conversation_state_dir,
+        conversation_summary_path,
+        group_id_ref,
+        group_id_len: group_id_bytes.as_bytes().len(),
+        member_count,
+        epoch,
+        provider_storage_written: true,
+    })
 }

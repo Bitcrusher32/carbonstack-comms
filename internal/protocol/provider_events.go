@@ -49,7 +49,8 @@ const (
 	ProviderEventPublicBundleCreated      ProviderEventName = "provider.public_bundle.created"
 
 	ProviderEventPublicBundleExported       ProviderEventName = "provider.public_bundle.exported"
-	ProviderEventConversationCreated        ProviderEventName = "conversation.created"
+	ProviderEventConversationCreated        ProviderEventName = "provider.conversation.created"
+	ProviderEventConversationExists         ProviderEventName = "provider.conversation.exists"
 	ProviderEventConversationWelcomeCreated ProviderEventName = "conversation.welcome.created"
 	ProviderEventConversationWelcomeStaged  ProviderEventName = "conversation.welcome.staged"
 	ProviderEventConversationMemberAdded    ProviderEventName = "conversation.member_added"
@@ -159,6 +160,14 @@ func DescribeProviderEvent(name ProviderEventName) ProviderEventDescriptor {
 			Name:          name,
 			Class:         ProviderEventClassPublicSetup,
 			Severity:      ProviderEventSeverityInfo,
+			TrustRelevant: false,
+		}
+
+	case ProviderEventConversationExists:
+		return ProviderEventDescriptor{
+			Name:          name,
+			Class:         ProviderEventClassMembership,
+			Severity:      ProviderEventSeverityWarning,
 			TrustRelevant: false,
 		}
 
