@@ -1,4 +1,4 @@
-﻿use openmls::prelude::*;
+use openmls::prelude::*;
 use openmls_basic_credential::SignatureKeyPair;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -609,6 +609,7 @@ pub struct ConversationCreateResult {
     pub member_count: usize,
     pub epoch: String,
     pub provider_storage_written: bool,
+    pub group_reloadable: bool,
 }
 
 #[derive(Serialize)]
@@ -624,6 +625,7 @@ struct ConversationSummary<'a> {
     epoch: &'a str,
     conversation_created: bool,
     provider_storage_written: bool,
+    group_reloadable: bool,
     private_material_included: bool,
     warning: &'a str,
 }
@@ -701,9 +703,10 @@ pub fn create_dev_conversation(
             member_count,
             epoch: &epoch,
             conversation_created: true,
-            provider_storage_written: true,
+            provider_storage_written: false,
+            group_reloadable: false,
             private_material_included: false,
-            warning: "dev-only OpenMLS conversation summary; not production messaging or secure vault storage",
+            warning: "dev-only OpenMLS conversation summary; group is not reloadable across sidecar process invocations yet; not production messaging or secure vault storage",
         },
     )?;
 
@@ -716,6 +719,7 @@ pub fn create_dev_conversation(
         group_id_len: group_id_bytes.as_bytes().len(),
         member_count,
         epoch,
-        provider_storage_written: true,
+        provider_storage_written: false,
+        group_reloadable: false,
     })
 }

@@ -27,46 +27,46 @@ type openMLSSidecarEnvelope struct {
 }
 
 type openMLSSidecarProviderData struct {
-	Capabilities            []string `json:"capabilities"`
-	Unsupported             []string `json:"unsupported"`
-	SecurityLevel           string   `json:"security_level"`
-	DeviceLabel             string   `json:"device_label"`
-	IdentityExists          bool     `json:"identity_exists"`
-	IdentityLoadable        bool     `json:"identity_loadable"`
-	IdentityCreated         bool     `json:"identity_created"`
-	StateWritten            bool     `json:"state_written"`
-	StateScope              string   `json:"state_scope"`
-	StatePathHint           string   `json:"state_path_hint"`
-	PrepManifestPathHint    string   `json:"prep_manifest_path_hint"`
-	IdentitySummaryPathHint string   `json:"identity_summary_path_hint"`
-	IdentityStatePathHint   string   `json:"identity_state_path_hint"`
-	SignerPathHint          string   `json:"signer_path_hint"`
-	PublicIdentityRef       string   `json:"public_identity_ref"`
-	PublicSignatureKeyLen   int      `json:"public_signature_key_len"`
-	ManifestPathHint        string   `json:"manifest_path_hint"`
-	ProviderStorageWritten  bool     `json:"provider_storage_written"`
-
-	ConversationLabel            string `json:"conversation_label"`
-	ConversationCreated          bool   `json:"conversation_created"`
-	ConversationStatePathHint    string `json:"conversation_state_path_hint"`
-	ConversationSummaryPathHint  string `json:"conversation_summary_path_hint"`
-	Ciphersuite                  string `json:"ciphersuite"`
-	GroupIDRef                   string `json:"group_id_ref"`
-	GroupIDLen                   int    `json:"group_id_len"`
-	MemberCount                  int    `json:"member_count"`
-	Epoch                        string `json:"epoch"`
-	PublicBundleAvailable        bool   `json:"public_bundle_available"`
-	PublicBundleExported         bool   `json:"public_bundle_exported"`
-	PublicBundleSummaryPathHint  string `json:"public_bundle_summary_path_hint"`
-	KeyPackageCreated            bool   `json:"key_package_created"`
-	KeyPackageArtifactWritten    bool   `json:"key_package_artifact_written"`
-	KeyPackageArtifactPathHint   string `json:"key_package_artifact_path_hint"`
-	KeyPackageArtifactSHA256     string `json:"key_package_artifact_sha256"`
-	KeyPackageArtifactSizeBytes  int    `json:"key_package_artifact_size_bytes"`
-	PublicBundleManifestWritten  bool   `json:"public_bundle_manifest_written"`
-	PublicBundleManifestPathHint string `json:"public_bundle_manifest_path_hint"`
-	KeyPackageRef                string `json:"key_package_ref"`
-	KeyPackageHashLen            int    `json:"key_package_hash_len"`
+	Capabilities                 []string `json:"capabilities"`
+	Unsupported                  []string `json:"unsupported"`
+	SecurityLevel                string   `json:"security_level"`
+	DeviceLabel                  string   `json:"device_label"`
+	IdentityExists               bool     `json:"identity_exists"`
+	IdentityLoadable             bool     `json:"identity_loadable"`
+	IdentityCreated              bool     `json:"identity_created"`
+	StateWritten                 bool     `json:"state_written"`
+	StateScope                   string   `json:"state_scope"`
+	StatePathHint                string   `json:"state_path_hint"`
+	PrepManifestPathHint         string   `json:"prep_manifest_path_hint"`
+	IdentitySummaryPathHint      string   `json:"identity_summary_path_hint"`
+	IdentityStatePathHint        string   `json:"identity_state_path_hint"`
+	SignerPathHint               string   `json:"signer_path_hint"`
+	PublicIdentityRef            string   `json:"public_identity_ref"`
+	PublicSignatureKeyLen        int      `json:"public_signature_key_len"`
+	ManifestPathHint             string   `json:"manifest_path_hint"`
+	ProviderStorageWritten       bool     `json:"provider_storage_written"`
+	GroupReloadable              bool     `json:"group_reloadable"`
+	ConversationLabel            string   `json:"conversation_label"`
+	ConversationCreated          bool     `json:"conversation_created"`
+	ConversationStatePathHint    string   `json:"conversation_state_path_hint"`
+	ConversationSummaryPathHint  string   `json:"conversation_summary_path_hint"`
+	Ciphersuite                  string   `json:"ciphersuite"`
+	GroupIDRef                   string   `json:"group_id_ref"`
+	GroupIDLen                   int      `json:"group_id_len"`
+	MemberCount                  int      `json:"member_count"`
+	Epoch                        string   `json:"epoch"`
+	PublicBundleAvailable        bool     `json:"public_bundle_available"`
+	PublicBundleExported         bool     `json:"public_bundle_exported"`
+	PublicBundleSummaryPathHint  string   `json:"public_bundle_summary_path_hint"`
+	KeyPackageCreated            bool     `json:"key_package_created"`
+	KeyPackageArtifactWritten    bool     `json:"key_package_artifact_written"`
+	KeyPackageArtifactPathHint   string   `json:"key_package_artifact_path_hint"`
+	KeyPackageArtifactSHA256     string   `json:"key_package_artifact_sha256"`
+	KeyPackageArtifactSizeBytes  int      `json:"key_package_artifact_size_bytes"`
+	PublicBundleManifestWritten  bool     `json:"public_bundle_manifest_written"`
+	PublicBundleManifestPathHint string   `json:"public_bundle_manifest_path_hint"`
+	KeyPackageRef                string   `json:"key_package_ref"`
+	KeyPackageHashLen            int      `json:"key_package_hash_len"`
 }
 
 type openMLSSidecarError struct {
@@ -296,13 +296,13 @@ func TestOpenMLSSidecarIdentityCreateWritesDevIdentityState(t *testing.T) {
 
 		IdentityLoadable bool `json:"identity_loadable"`
 
-		IdentityCreated        bool   `json:"identity_created"`
-		PublicIdentityRef      string `json:"public_identity_ref"`
-		PublicSignatureKeyLen  int    `json:"public_signature_key_len"`
-		KeyPackageCreated      bool   `json:"key_package_created"`
-		PublicBundleAvailable  bool   `json:"public_bundle_available"`
-		ProviderStorageWritten bool   `json:"provider_storage_written"`
-
+		IdentityCreated             bool   `json:"identity_created"`
+		PublicIdentityRef           string `json:"public_identity_ref"`
+		PublicSignatureKeyLen       int    `json:"public_signature_key_len"`
+		KeyPackageCreated           bool   `json:"key_package_created"`
+		PublicBundleAvailable       bool   `json:"public_bundle_available"`
+		ProviderStorageWritten      bool   `json:"provider_storage_written"`
+		GroupReloadable             bool   `json:"group_reloadable"`
 		ConversationLabel           string `json:"conversation_label"`
 		ConversationCreated         bool   `json:"conversation_created"`
 		ConversationStatePathHint   string `json:"conversation_state_path_hint"`
@@ -360,10 +360,10 @@ func TestOpenMLSSidecarIdentityCreateWritesDevIdentityState(t *testing.T) {
 
 		IdentityLoadable bool `json:"identity_loadable"`
 
-		IdentityCreated        bool   `json:"identity_created"`
-		SignerFile             string `json:"signer_file"`
-		ProviderStorageWritten bool   `json:"provider_storage_written"`
-
+		IdentityCreated             bool   `json:"identity_created"`
+		SignerFile                  string `json:"signer_file"`
+		ProviderStorageWritten      bool   `json:"provider_storage_written"`
+		GroupReloadable             bool   `json:"group_reloadable"`
 		ConversationLabel           string `json:"conversation_label"`
 		ConversationCreated         bool   `json:"conversation_created"`
 		ConversationStatePathHint   string `json:"conversation_state_path_hint"`
@@ -702,17 +702,17 @@ func TestOpenMLSSidecarPublicBundleExportCreatesSummary(t *testing.T) {
 		PublicBundleManifestPathHint string `json:"public_bundle_manifest_path_hint"`
 		PublicBundleAvailable        bool   `json:"public_bundle_available"`
 		ProviderStorageWritten       bool   `json:"provider_storage_written"`
-
-		ConversationLabel           string `json:"conversation_label"`
-		ConversationCreated         bool   `json:"conversation_created"`
-		ConversationStatePathHint   string `json:"conversation_state_path_hint"`
-		ConversationSummaryPathHint string `json:"conversation_summary_path_hint"`
-		Ciphersuite                 string `json:"ciphersuite"`
-		GroupIDRef                  string `json:"group_id_ref"`
-		GroupIDLen                  int    `json:"group_id_len"`
-		MemberCount                 int    `json:"member_count"`
-		Epoch                       string `json:"epoch"`
-		PrivateMaterialIncluded     bool   `json:"private_material_included"`
+		GroupReloadable              bool   `json:"group_reloadable"`
+		ConversationLabel            string `json:"conversation_label"`
+		ConversationCreated          bool   `json:"conversation_created"`
+		ConversationStatePathHint    string `json:"conversation_state_path_hint"`
+		ConversationSummaryPathHint  string `json:"conversation_summary_path_hint"`
+		Ciphersuite                  string `json:"ciphersuite"`
+		GroupIDRef                   string `json:"group_id_ref"`
+		GroupIDLen                   int    `json:"group_id_len"`
+		MemberCount                  int    `json:"member_count"`
+		Epoch                        string `json:"epoch"`
+		PrivateMaterialIncluded      bool   `json:"private_material_included"`
 	}
 
 	readJSONFile(t, publicBundleSummaryPath, &summary)
@@ -894,7 +894,7 @@ func TestOpenMLSSidecarPublicBundleExportWritesArtifact(t *testing.T) {
 		PublicBundleManifestPath    string `json:"public_bundle_manifest_path"`
 		PublicBundleAvailable       bool   `json:"public_bundle_available"`
 		ProviderStorageWritten      bool   `json:"provider_storage_written"`
-
+		GroupReloadable             bool   `json:"group_reloadable"`
 		ConversationLabel           string `json:"conversation_label"`
 		ConversationCreated         bool   `json:"conversation_created"`
 		ConversationStatePathHint   string `json:"conversation_state_path_hint"`
@@ -973,7 +973,7 @@ func TestOpenMLSSidecarPublicBundleExportWritesArtifact(t *testing.T) {
 		KeyPackageArtifactSHA256    string `json:"key_package_artifact_sha256"`
 		KeyPackageArtifactSizeBytes int    `json:"key_package_artifact_size_bytes"`
 		ProviderStorageWritten      bool   `json:"provider_storage_written"`
-
+		GroupReloadable             bool   `json:"group_reloadable"`
 		ConversationLabel           string `json:"conversation_label"`
 		ConversationCreated         bool   `json:"conversation_created"`
 		ConversationStatePathHint   string `json:"conversation_state_path_hint"`
@@ -1147,9 +1147,12 @@ func TestOpenMLSSidecarConversationCreate(t *testing.T) {
 	if conversationEnvelope.Data.Epoch == "" {
 		t.Fatal("conversation-create should return epoch")
 	}
+	if conversationEnvelope.Data.ProviderStorageWritten {
+		t.Fatal("conversation-create must not claim provider_storage_written=true until reloadable provider/group persistence exists")
+	}
 
-	if !conversationEnvelope.Data.ProviderStorageWritten {
-		t.Fatal("conversation-create should report provider_storage_written=true for dev-local OpenMLS group creation")
+	if conversationEnvelope.Data.GroupReloadable {
+		t.Fatal("conversation-create must not claim group_reloadable=true until MlsGroup::load succeeds across sidecar invocations")
 	}
 
 	if len(conversationEnvelope.Events) != 1 {
@@ -1185,6 +1188,7 @@ func TestOpenMLSSidecarConversationCreate(t *testing.T) {
 		Epoch                   string `json:"epoch"`
 		ConversationCreated     bool   `json:"conversation_created"`
 		ProviderStorageWritten  bool   `json:"provider_storage_written"`
+		GroupReloadable         bool   `json:"group_reloadable"`
 		PrivateMaterialIncluded bool   `json:"private_material_included"`
 	}
 
@@ -1221,9 +1225,12 @@ func TestOpenMLSSidecarConversationCreate(t *testing.T) {
 	if !summary.ConversationCreated {
 		t.Fatal("summary should report conversation_created=true")
 	}
+	if summary.ProviderStorageWritten {
+		t.Fatal("summary must not claim provider_storage_written=true until reloadable provider/group persistence exists")
+	}
 
-	if !summary.ProviderStorageWritten {
-		t.Fatal("summary should report provider_storage_written=true")
+	if summary.GroupReloadable {
+		t.Fatal("summary must not claim group_reloadable=true until MlsGroup::load succeeds across sidecar invocations")
 	}
 
 	if summary.PrivateMaterialIncluded {

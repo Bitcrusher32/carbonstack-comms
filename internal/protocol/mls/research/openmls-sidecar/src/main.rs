@@ -244,7 +244,8 @@ fn print_conversation_create_success(result: &ConversationCreateResult) {
             "group_id_len": result.group_id_len,
             "member_count": result.member_count,
             "epoch": result.epoch,
-            "provider_storage_written": result.provider_storage_written
+            "provider_storage_written": result.provider_storage_written,
+            "group_reloadable": result.group_reloadable,
         },
         "events": [
             {
@@ -255,6 +256,8 @@ fn print_conversation_create_success(result: &ConversationCreateResult) {
         ],
         "warnings": [
             "dev-only OpenMLS conversation state; not production messaging",
+            "conversation group is not reloadable across sidecar process invocations yet",
+            "conversation-add-member is blocked until provider/group persistence is repaired",
             "private material was loaded locally but not printed",
             "conversation-add-member is not implemented",
             "conversation-join is not implemented",
@@ -695,7 +698,7 @@ fn print_public_bundle_export_success(result: &PublicBundleExportResult) {
             "public_signature_key_len": result.public_signature_key_len,
             "key_package_ref": result.key_package_ref,
             "key_package_hash_len": result.key_package_hash_len,
-            "provider_storage_written": result.provider_storage_written
+            "provider_storage_written": result.provider_storage_written,
         },
         "events": [
             {
