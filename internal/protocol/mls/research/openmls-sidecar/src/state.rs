@@ -1510,3 +1510,583 @@ pub fn join_dev_conversation(
         epoch,
     })
 }
+
+pub fn conversation_messages_dir(conversation_label: &str) -> PathBuf {
+    conversation_state_dir(conversation_label).join("messages")
+}
+
+pub fn conversation_message_dir(conversation_label: &str, message_label: &str) -> PathBuf {
+    conversation_messages_dir(conversation_label).join(message_label)
+}
+
+pub fn conversation_message_artifact_path(
+    conversation_label: &str,
+    message_label: &str,
+) -> PathBuf {
+    conversation_message_dir(conversation_label, message_label).join("application-message.bin")
+}
+
+pub fn conversation_message_manifest_path(
+    conversation_label: &str,
+    message_label: &str,
+) -> PathBuf {
+    conversation_message_dir(conversation_label, message_label).join("message-manifest.json")
+}
+
+pub fn conversation_message_protect_summary_path(
+    conversation_label: &str,
+    message_label: &str,
+) -> PathBuf {
+    conversation_message_dir(conversation_label, message_label).join("message-protect-summary.json")
+}
+
+pub fn device_conversation_message_open_summary_path(
+    device_label: &str,
+    conversation_label: &str,
+    message_label: &str,
+) -> PathBuf {
+    device_conversation_state_dir(device_label, conversation_label)
+        .join("opened-messages")
+        .join(message_label)
+        .join("message-open-summary.json")
+}
+
+#[derive(Debug, Clone)]
+pub struct MessageProtectResult {
+    pub device_label: String,
+    pub conversation_label: String,
+    pub message_label: String,
+    pub conversation_state_dir: PathBuf,
+    pub provider_storage_path: PathBuf,
+    pub message_dir: PathBuf,
+    pub message_artifact_path: PathBuf,
+    pub message_manifest_path: PathBuf,
+    pub message_protect_summary_path: PathBuf,
+    pub message_artifact_sha256: String,
+    pub message_artifact_size_bytes: usize,
+    pub group_id_ref: String,
+    pub member_count: usize,
+    pub epoch_before: String,
+    pub epoch_after: String,
+    pub provider_storage_loaded: bool,
+    pub provider_storage_written: bool,
+    pub group_reloadable: bool,
+    pub message_protected: bool,
+    pub protected_message_written: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct MessageOpenResult {
+    pub device_label: String,
+    pub conversation_label: String,
+    pub message_label: String,
+    pub conversation_state_dir: PathBuf,
+    pub provider_storage_path: PathBuf,
+    pub message_artifact_path: PathBuf,
+    pub message_open_summary_path: PathBuf,
+    pub plaintext_utf8: String,
+    pub plaintext_len: usize,
+    pub group_id_ref: String,
+    pub member_count: usize,
+    pub epoch_before: String,
+    pub epoch_after: String,
+    pub provider_storage_loaded: bool,
+    pub provider_storage_written: bool,
+    pub group_reloadable: bool,
+    pub message_opened: bool,
+}
+
+#[derive(Serialize)]
+struct MessageManifest<'a> {
+    summary_version: &'a str,
+    device_label: &'a str,
+    conversation_label: &'a str,
+    message_label: &'a str,
+    state_scope: &'a str,
+    group_id_ref: &'a str,
+    member_count: usize,
+    epoch_before: &'a str,
+    epoch_after: &'a str,
+    message_artifact_file: &'a str,
+    message_artifact_sha256: &'a str,
+    message_artifact_size_bytes: usize,
+    provider_storage_loaded: bool,
+    provider_storage_written: bool,
+    group_reloadable: bool,
+    private_material_included: bool,
+    warning: &'a str,
+}
+
+#[derive(Serialize)]
+struct MessageProtectSummary<'a> {
+    summary_version: &'a str,
+    device_label: &'a str,
+    conversation_label: &'a str,
+    message_label: &'a str,
+    state_scope: &'a str,
+    group_id_ref: &'a str,
+    member_count: usize,
+    epoch_before: &'a str,
+    epoch_after: &'a str,
+    message_protected: bool,
+    protected_message_written: bool,
+    message_artifact_file: &'a str,
+    message_artifact_sha256: &'a str,
+    message_artifact_size_bytes: usize,
+    provider_storage_loaded: bool,
+    provider_storage_written: bool,
+    group_reloadable: bool,
+    private_material_included: bool,
+    warning: &'a str,
+}
+
+#[derive(Serialize)]
+struct MessageOpenSummary<'a> {
+    summary_version: &'a str,
+    device_label: &'a str,
+    conversation_label: &'a str,
+    message_label: &'a str,
+    state_scope: &'a str,
+    group_id_ref: &'a str,
+    member_count: usize,
+    epoch_before: &'a str,
+    epoch_after: &'a str,
+    message_opened: bool,
+    message_artifact_path_hint: &'a str,
+    plaintext_len: usize,
+    provider_storage_loaded: bool,
+    provider_storage_written: bool,
+    group_reloadable: bool,
+    private_material_included: bool,
+    warning: &'a str,
+}
+
+fn validate_plaintext_for_dev(plaintext: &str) -> io::Result<()> {
+    if plaintext.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "plaintext is empty",
+        ));
+    }
+
+    const MAX_DEV_PLAINTEXT_BYTES: usize = 4096;
+
+    if plaintext.as_bytes().len() > MAX_DEV_PLAINTEXT_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "plaintext is too large for dev message-protect",
+        ));
+    }
+
+    Ok(())
+}
+
+fn validate_message_artifact_path(path: &Path) -> io::Result<()> {
+    if path.as_os_str().is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "message artifact path is empty",
+        ));
+    }
+
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("");
+
+    let forbidden = [
+        "signer.json",
+        "provider-storage.json",
+        "conversation-summary.json",
+        "identity-state.json",
+        "identity-summary.json",
+        "identity-prep.json",
+        "public-bundle-summary.json",
+        "public-bundle-manifest.json",
+        "public-bundle.keypackage.bin",
+        "welcome.bin",
+        "welcome-manifest.json",
+        "add-member-summary.json",
+        "join-summary.json",
+    ];
+
+    if forbidden.iter().any(|blocked| *blocked == file_name) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("refusing message artifact path with forbidden file name: {file_name}"),
+        ));
+    }
+
+    let metadata = fs::metadata(path)?;
+
+    if !metadata.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "message artifact path is not a file",
+        ));
+    }
+
+    if metadata.len() == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "message artifact is empty",
+        ));
+    }
+
+    const MAX_MESSAGE_ARTIFACT_BYTES: u64 = 1024 * 1024;
+
+    if metadata.len() > MAX_MESSAGE_ARTIFACT_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "message artifact is too large",
+        ));
+    }
+
+    Ok(())
+}
+
+pub fn protect_dev_message(
+    device_label: &str,
+    conversation_label: &str,
+    plaintext: &str,
+) -> io::Result<MessageProtectResult> {
+    validate_plaintext_for_dev(plaintext)?;
+
+    let status = load_dev_identity_status(device_label)?;
+
+    let signer: SignatureKeyPair = read_json_file(&status.signer_path).map_err(|err| {
+        io::Error::new(io::ErrorKind::Other, format!("signer load failed: {err}"))
+    })?;
+
+    let conversation_state_dir = conversation_state_dir(conversation_label);
+    let provider_storage_path = conversation_provider_storage_path(conversation_label);
+
+    if !provider_storage_path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "conversation provider storage is missing",
+        ));
+    }
+
+    let message_label = "message-0001";
+    let message_dir = conversation_message_dir(conversation_label, message_label);
+    let message_artifact_path =
+        conversation_message_artifact_path(conversation_label, message_label);
+    let message_manifest_path =
+        conversation_message_manifest_path(conversation_label, message_label);
+    let message_protect_summary_path =
+        conversation_message_protect_summary_path(conversation_label, message_label);
+
+    if message_dir.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "message artifact state already exists",
+        ));
+    }
+
+    fs::create_dir_all(&message_dir)?;
+
+    let mut provider = CarbonStackSidecarProvider::default();
+    provider.load_storage_from_path(&provider_storage_path)?;
+
+    let group_id_bytes = format!("carbonstack-openmls-dev-conversation:{conversation_label}");
+    let group_id = GroupId::from_slice(group_id_bytes.as_bytes());
+
+    let mut group = MlsGroup::load(provider.storage(), &group_id)
+        .map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("conversation group load failed: {err:?}"),
+            )
+        })?
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "conversation group not found in provider storage",
+            )
+        })?;
+
+    let epoch_before = format!("{:?}", group.epoch());
+    let member_count = group.members().count();
+    let group_id_bytes = group.group_id().as_slice().to_vec();
+    let group_id_ref = format!("sha256:{}", hex::encode(Sha256::digest(&group_id_bytes)));
+
+    let message_out = group
+        .create_message(&provider, &signer, plaintext.as_bytes())
+        .map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("message protect failed: {err:?}"),
+            )
+        })?;
+
+    let message_bytes = message_out.to_bytes().map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("message serialization failed: {err:?}"),
+        )
+    })?;
+
+    fs::write(&message_artifact_path, &message_bytes)?;
+
+    let message_artifact_sha256 = format!("sha256:{}", hex::encode(Sha256::digest(&message_bytes)));
+    let message_artifact_size_bytes = message_bytes.len();
+
+    provider.save_storage_to_path(&provider_storage_path)?;
+
+    let mut reloaded_provider = CarbonStackSidecarProvider::default();
+    reloaded_provider.load_storage_from_path(&provider_storage_path)?;
+
+    let reloaded_group = MlsGroup::load(reloaded_provider.storage(), &group_id)
+        .map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("message protect reload failed: {err:?}"),
+            )
+        })?
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "message protect group not found after storage save",
+            )
+        })?;
+
+    let epoch_after = format!("{:?}", reloaded_group.epoch());
+
+    write_json_file(
+        &message_manifest_path,
+        &MessageManifest {
+            summary_version: "message-manifest/v0",
+            device_label,
+            conversation_label,
+            message_label,
+            state_scope: "dev-local-sidecar-state",
+            group_id_ref: &group_id_ref,
+            member_count,
+            epoch_before: &epoch_before,
+            epoch_after: &epoch_after,
+            message_artifact_file: "application-message.bin",
+            message_artifact_sha256: &message_artifact_sha256,
+            message_artifact_size_bytes,
+            provider_storage_loaded: true,
+            provider_storage_written: true,
+            group_reloadable: true,
+            private_material_included: false,
+            warning: "dev-only protected MLS application message artifact; raw bytes not printed",
+        },
+    )?;
+
+    write_json_file(
+        &message_protect_summary_path,
+        &MessageProtectSummary {
+            summary_version: "message-protect-summary/v0",
+            device_label,
+            conversation_label,
+            message_label,
+            state_scope: "dev-local-sidecar-state",
+            group_id_ref: &group_id_ref,
+            member_count,
+            epoch_before: &epoch_before,
+            epoch_after: &epoch_after,
+            message_protected: true,
+            protected_message_written: true,
+            message_artifact_file: "application-message.bin",
+            message_artifact_sha256: &message_artifact_sha256,
+            message_artifact_size_bytes,
+            provider_storage_loaded: true,
+            provider_storage_written: true,
+            group_reloadable: true,
+            private_material_included: false,
+            warning: "dev-only message protect summary; plaintext not stored in summary",
+        },
+    )?;
+
+    Ok(MessageProtectResult {
+        device_label: device_label.to_string(),
+        conversation_label: conversation_label.to_string(),
+        message_label: message_label.to_string(),
+        conversation_state_dir,
+        provider_storage_path,
+        message_dir,
+        message_artifact_path,
+        message_manifest_path,
+        message_protect_summary_path,
+        message_artifact_sha256,
+        message_artifact_size_bytes,
+        group_id_ref,
+        member_count,
+        epoch_before,
+        epoch_after,
+        provider_storage_loaded: true,
+        provider_storage_written: true,
+        group_reloadable: true,
+        message_protected: true,
+        protected_message_written: true,
+    })
+}
+
+pub fn open_dev_message(
+    device_label: &str,
+    conversation_label: &str,
+    message_artifact_path: &Path,
+) -> io::Result<MessageOpenResult> {
+    validate_message_artifact_path(message_artifact_path)?;
+
+    let conversation_state_dir = device_conversation_state_dir(device_label, conversation_label);
+    let provider_storage_path =
+        device_conversation_provider_storage_path(device_label, conversation_label);
+
+    if !provider_storage_path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "device conversation provider storage is missing",
+        ));
+    }
+
+    let message_label = "message-0001";
+    let message_open_summary_path = device_conversation_message_open_summary_path(
+        device_label,
+        conversation_label,
+        message_label,
+    );
+
+    if let Some(parent) = message_open_summary_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let message_bytes = fs::read(message_artifact_path)?;
+    let message_in = MlsMessageIn::tls_deserialize_exact_bytes(&message_bytes).map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("message artifact deserialization failed: {err:?}"),
+        )
+    })?;
+
+    let protocol_message = message_in.try_into_protocol_message().map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("message artifact was not a protocol message: {err:?}"),
+        )
+    })?;
+
+    let mut provider = CarbonStackSidecarProvider::default();
+    provider.load_storage_from_path(&provider_storage_path)?;
+
+    let group_id_bytes = format!("carbonstack-openmls-dev-conversation:{conversation_label}");
+    let group_id = GroupId::from_slice(group_id_bytes.as_bytes());
+
+    let mut group = MlsGroup::load(provider.storage(), &group_id)
+        .map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("joined conversation group load failed: {err:?}"),
+            )
+        })?
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "joined conversation group not found in provider storage",
+            )
+        })?;
+
+    let epoch_before = format!("{:?}", group.epoch());
+
+    let processed_message = group
+        .process_message(&provider, protocol_message)
+        .map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("message open failed: {err:?}"),
+            )
+        })?;
+
+    let plaintext_bytes = match processed_message.into_content() {
+        ProcessedMessageContent::ApplicationMessage(application_message) => {
+            application_message.into_bytes()
+        }
+        _ => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "processed message was not an application message",
+            ));
+        }
+    };
+
+    let plaintext_utf8 = String::from_utf8(plaintext_bytes.clone()).map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("application plaintext was not UTF-8: {err:?}"),
+        )
+    })?;
+
+    let plaintext_len = plaintext_bytes.len();
+
+    let member_count = group.members().count();
+    let group_id_bytes = group.group_id().as_slice().to_vec();
+    let group_id_ref = format!("sha256:{}", hex::encode(Sha256::digest(&group_id_bytes)));
+
+    provider.save_storage_to_path(&provider_storage_path)?;
+
+    let mut reloaded_provider = CarbonStackSidecarProvider::default();
+    reloaded_provider.load_storage_from_path(&provider_storage_path)?;
+
+    let reloaded_group = MlsGroup::load(reloaded_provider.storage(), &group_id)
+        .map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("message open reload failed: {err:?}"),
+            )
+        })?
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "message open group not found after storage save",
+            )
+        })?;
+
+    let epoch_after = format!("{:?}", reloaded_group.epoch());
+    let message_artifact_path_hint = message_artifact_path.to_string_lossy();
+
+    write_json_file(
+        &message_open_summary_path,
+        &MessageOpenSummary {
+            summary_version: "message-open-summary/v0",
+            device_label,
+            conversation_label,
+            message_label,
+            state_scope: "dev-local-sidecar-state",
+            group_id_ref: &group_id_ref,
+            member_count,
+            epoch_before: &epoch_before,
+            epoch_after: &epoch_after,
+            message_opened: true,
+            message_artifact_path_hint: &message_artifact_path_hint,
+            plaintext_len,
+            provider_storage_loaded: true,
+            provider_storage_written: true,
+            group_reloadable: true,
+            private_material_included: false,
+            warning: "dev-only message open summary; plaintext returned only in bounded stdout",
+        },
+    )?;
+
+    Ok(MessageOpenResult {
+        device_label: device_label.to_string(),
+        conversation_label: conversation_label.to_string(),
+        message_label: message_label.to_string(),
+        conversation_state_dir,
+        provider_storage_path,
+        message_artifact_path: message_artifact_path.to_path_buf(),
+        message_open_summary_path,
+        plaintext_utf8,
+        plaintext_len,
+        group_id_ref,
+        member_count,
+        epoch_before,
+        epoch_after,
+        provider_storage_loaded: true,
+        provider_storage_written: true,
+        group_reloadable: true,
+        message_opened: true,
+    })
+}

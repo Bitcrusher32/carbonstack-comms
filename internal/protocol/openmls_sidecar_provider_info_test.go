@@ -27,63 +27,75 @@ type openMLSSidecarEnvelope struct {
 }
 
 type openMLSSidecarProviderData struct {
-	Capabilities                 []string `json:"capabilities"`
-	Unsupported                  []string `json:"unsupported"`
-	SecurityLevel                string   `json:"security_level"`
-	DeviceLabel                  string   `json:"device_label"`
-	IdentityExists               bool     `json:"identity_exists"`
-	IdentityLoadable             bool     `json:"identity_loadable"`
-	IdentityCreated              bool     `json:"identity_created"`
-	StateWritten                 bool     `json:"state_written"`
-	StateScope                   string   `json:"state_scope"`
-	StatePathHint                string   `json:"state_path_hint"`
-	PrepManifestPathHint         string   `json:"prep_manifest_path_hint"`
-	IdentitySummaryPathHint      string   `json:"identity_summary_path_hint"`
-	IdentityStatePathHint        string   `json:"identity_state_path_hint"`
-	SignerPathHint               string   `json:"signer_path_hint"`
-	PublicIdentityRef            string   `json:"public_identity_ref"`
-	PublicSignatureKeyLen        int      `json:"public_signature_key_len"`
-	ManifestPathHint             string   `json:"manifest_path_hint"`
-	ProviderStorageWritten       bool     `json:"provider_storage_written"`
-	ProviderStorageLoaded        bool     `json:"provider_storage_loaded"`
-	ProviderStoragePathHint      string   `json:"provider_storage_path_hint"`
-	GroupReloadable              bool     `json:"group_reloadable"`
-	Joined                       bool     `json:"joined"`
-	JoinSummaryPathHint          string   `json:"join_summary_path_hint"`
-	MemberAdded                  bool     `json:"member_added"`
-	WelcomeArtifactWritten       bool     `json:"welcome_artifact_written"`
-	PendingCommitMerged          bool     `json:"pending_commit_merged"`
-	MemberCountBefore            int      `json:"member_count_before"`
-	MemberCountAfter             int      `json:"member_count_after"`
-	EpochBefore                  string   `json:"epoch_before"`
-	EpochAfter                   string   `json:"epoch_after"`
-	MemberKeypackagePathHint     string   `json:"member_keypackage_path_hint"`
-	WelcomeArtifactPathHint      string   `json:"welcome_artifact_path_hint"`
-	WelcomeManifestPathHint      string   `json:"welcome_manifest_path_hint"`
-	AddMemberSummaryPathHint     string   `json:"add_member_summary_path_hint"`
-	WelcomeArtifactSHA256        string   `json:"welcome_artifact_sha256"`
-	WelcomeArtifactSizeBytes     int      `json:"welcome_artifact_size_bytes"`
-	ConversationLabel            string   `json:"conversation_label"`
-	ConversationCreated          bool     `json:"conversation_created"`
-	ConversationStatePathHint    string   `json:"conversation_state_path_hint"`
-	ConversationSummaryPathHint  string   `json:"conversation_summary_path_hint"`
-	Ciphersuite                  string   `json:"ciphersuite"`
-	GroupIDRef                   string   `json:"group_id_ref"`
-	GroupIDLen                   int      `json:"group_id_len"`
-	MemberCount                  int      `json:"member_count"`
-	Epoch                        string   `json:"epoch"`
-	PublicBundleAvailable        bool     `json:"public_bundle_available"`
-	PublicBundleExported         bool     `json:"public_bundle_exported"`
-	PublicBundleSummaryPathHint  string   `json:"public_bundle_summary_path_hint"`
-	KeyPackageCreated            bool     `json:"key_package_created"`
-	KeyPackageArtifactWritten    bool     `json:"key_package_artifact_written"`
-	KeyPackageArtifactPathHint   string   `json:"key_package_artifact_path_hint"`
-	KeyPackageArtifactSHA256     string   `json:"key_package_artifact_sha256"`
-	KeyPackageArtifactSizeBytes  int      `json:"key_package_artifact_size_bytes"`
-	PublicBundleManifestWritten  bool     `json:"public_bundle_manifest_written"`
-	PublicBundleManifestPathHint string   `json:"public_bundle_manifest_path_hint"`
-	KeyPackageRef                string   `json:"key_package_ref"`
-	KeyPackageHashLen            int      `json:"key_package_hash_len"`
+	Capabilities                  []string `json:"capabilities"`
+	Unsupported                   []string `json:"unsupported"`
+	SecurityLevel                 string   `json:"security_level"`
+	DeviceLabel                   string   `json:"device_label"`
+	IdentityExists                bool     `json:"identity_exists"`
+	IdentityLoadable              bool     `json:"identity_loadable"`
+	IdentityCreated               bool     `json:"identity_created"`
+	StateWritten                  bool     `json:"state_written"`
+	StateScope                    string   `json:"state_scope"`
+	StatePathHint                 string   `json:"state_path_hint"`
+	PrepManifestPathHint          string   `json:"prep_manifest_path_hint"`
+	IdentitySummaryPathHint       string   `json:"identity_summary_path_hint"`
+	IdentityStatePathHint         string   `json:"identity_state_path_hint"`
+	SignerPathHint                string   `json:"signer_path_hint"`
+	PublicIdentityRef             string   `json:"public_identity_ref"`
+	PublicSignatureKeyLen         int      `json:"public_signature_key_len"`
+	ManifestPathHint              string   `json:"manifest_path_hint"`
+	ProviderStorageWritten        bool     `json:"provider_storage_written"`
+	ProviderStorageLoaded         bool     `json:"provider_storage_loaded"`
+	ProviderStoragePathHint       string   `json:"provider_storage_path_hint"`
+	GroupReloadable               bool     `json:"group_reloadable"`
+	Joined                        bool     `json:"joined"`
+	JoinSummaryPathHint           string   `json:"join_summary_path_hint"`
+	MessageStatePathHint          string   `json:"message_state_path_hint"`
+	MessageArtifactPathHint       string   `json:"message_artifact_path_hint"`
+	MessageManifestPathHint       string   `json:"message_manifest_path_hint"`
+	MessageProtectSummaryPathHint string   `json:"message_protect_summary_path_hint"`
+	MessageOpenSummaryPathHint    string   `json:"message_open_summary_path_hint"`
+	MessageArtifactSHA256         string   `json:"message_artifact_sha256"`
+	MessageArtifactSizeBytes      int      `json:"message_artifact_size_bytes"`
+	MessageProtected              bool     `json:"message_protected"`
+	ProtectedMessageWritten       bool     `json:"protected_message_written"`
+	MessageOpened                 bool     `json:"message_opened"`
+	PlaintextUTF8                 string   `json:"plaintext_utf8"`
+	PlaintextLen                  int      `json:"plaintext_len"`
+	MemberAdded                   bool     `json:"member_added"`
+	WelcomeArtifactWritten        bool     `json:"welcome_artifact_written"`
+	PendingCommitMerged           bool     `json:"pending_commit_merged"`
+	MemberCountBefore             int      `json:"member_count_before"`
+	MemberCountAfter              int      `json:"member_count_after"`
+	EpochBefore                   string   `json:"epoch_before"`
+	EpochAfter                    string   `json:"epoch_after"`
+	MemberKeypackagePathHint      string   `json:"member_keypackage_path_hint"`
+	WelcomeArtifactPathHint       string   `json:"welcome_artifact_path_hint"`
+	WelcomeManifestPathHint       string   `json:"welcome_manifest_path_hint"`
+	AddMemberSummaryPathHint      string   `json:"add_member_summary_path_hint"`
+	WelcomeArtifactSHA256         string   `json:"welcome_artifact_sha256"`
+	WelcomeArtifactSizeBytes      int      `json:"welcome_artifact_size_bytes"`
+	ConversationLabel             string   `json:"conversation_label"`
+	ConversationCreated           bool     `json:"conversation_created"`
+	ConversationStatePathHint     string   `json:"conversation_state_path_hint"`
+	ConversationSummaryPathHint   string   `json:"conversation_summary_path_hint"`
+	Ciphersuite                   string   `json:"ciphersuite"`
+	GroupIDRef                    string   `json:"group_id_ref"`
+	GroupIDLen                    int      `json:"group_id_len"`
+	MemberCount                   int      `json:"member_count"`
+	Epoch                         string   `json:"epoch"`
+	PublicBundleAvailable         bool     `json:"public_bundle_available"`
+	PublicBundleExported          bool     `json:"public_bundle_exported"`
+	PublicBundleSummaryPathHint   string   `json:"public_bundle_summary_path_hint"`
+	KeyPackageCreated             bool     `json:"key_package_created"`
+	KeyPackageArtifactWritten     bool     `json:"key_package_artifact_written"`
+	KeyPackageArtifactPathHint    string   `json:"key_package_artifact_path_hint"`
+	KeyPackageArtifactSHA256      string   `json:"key_package_artifact_sha256"`
+	KeyPackageArtifactSizeBytes   int      `json:"key_package_artifact_size_bytes"`
+	PublicBundleManifestWritten   bool     `json:"public_bundle_manifest_written"`
+	PublicBundleManifestPathHint  string   `json:"public_bundle_manifest_path_hint"`
+	KeyPackageRef                 string   `json:"key_package_ref"`
+	KeyPackageHashLen             int      `json:"key_package_hash_len"`
 }
 
 type openMLSSidecarError struct {
@@ -134,9 +146,9 @@ func TestOpenMLSSidecarProviderInfoCommand(t *testing.T) {
 	assertStringPresent(t, envelope.Data.Capabilities, "conversation-load-check")
 	assertStringPresent(t, envelope.Data.Capabilities, "conversation-add-member")
 	assertStringPresent(t, envelope.Data.Capabilities, "conversation-join")
+	assertStringPresent(t, envelope.Data.Capabilities, "message-protect")
+	assertStringPresent(t, envelope.Data.Capabilities, "message-open")
 	unsupported := []string{
-		"message-protect",
-		"message-open",
 		"state-checkpoint",
 		"state-load-check",
 	}
@@ -163,7 +175,7 @@ func TestOpenMLSSidecarProviderInfoCommand(t *testing.T) {
 }
 
 func TestOpenMLSSidecarUnsupportedCommandEnvelope(t *testing.T) {
-	output, err := runOpenMLSSidecar("message-protect")
+	output, err := runOpenMLSSidecar("state-checkpoint")
 	assertExitCode(t, err, 2)
 
 	envelope := parseSidecarEnvelope(t, output)
@@ -172,8 +184,8 @@ func TestOpenMLSSidecarUnsupportedCommandEnvelope(t *testing.T) {
 		t.Fatal("unsupported command envelope ok = true, want false")
 	}
 
-	if envelope.Command != "message-protect" {
-		t.Fatalf("command = %q, want message-protect", envelope.Command)
+	if envelope.Command != "state-checkpoint" {
+		t.Fatalf("command = %q, want state-checkpoint", envelope.Command)
 	}
 
 	assertProviderEnvelopeBase(t, envelope)
@@ -1812,6 +1824,276 @@ func TestOpenMLSSidecarConversationJoinWelcomeConsume(t *testing.T) {
 	}
 
 	assertNoSecretMaterialInStdout(t, duplicateOutput)
+}
+
+func TestOpenMLSSidecarMessageProtectOpenOneWay(t *testing.T) {
+	removeOpenMLSSidecarState(t)
+
+	aliceIdentityOutput, aliceIdentityErr := runOpenMLSSidecar("identity-create", "--device-label", "carbonstack-alice-device")
+	if aliceIdentityErr != nil {
+		t.Fatalf("alice identity-create failed: %v\n%s", aliceIdentityErr, string(aliceIdentityOutput))
+	}
+
+	bobIdentityOutput, bobIdentityErr := runOpenMLSSidecar("identity-create", "--device-label", "carbonstack-bob-device")
+	if bobIdentityErr != nil {
+		t.Fatalf("bob identity-create failed: %v\n%s", bobIdentityErr, string(bobIdentityOutput))
+	}
+
+	bobBundleOutput, bobBundleErr := runOpenMLSSidecar("public-bundle-export", "--device-label", "carbonstack-bob-device", "--write-artifact")
+	if bobBundleErr != nil {
+		t.Fatalf("bob public-bundle-export failed: %v\n%s", bobBundleErr, string(bobBundleOutput))
+	}
+
+	bobBundleEnvelope := parseSidecarEnvelope(t, bobBundleOutput)
+	if !bobBundleEnvelope.OK {
+		t.Fatal("bob public-bundle-export ok = false, want true")
+	}
+
+	if !bobBundleEnvelope.Data.ProviderStorageWritten {
+		t.Fatal("bob public-bundle-export should persist provider storage for later Welcome consumption")
+	}
+
+	if bobBundleEnvelope.Data.KeyPackageArtifactPathHint == "" {
+		t.Fatal("bob public-bundle-export should return KeyPackage artifact path")
+	}
+
+	aliceConversationOutput, aliceConversationErr := runOpenMLSSidecar("conversation-create", "--device-label", "carbonstack-alice-device", "--conversation-label", "carbonstack-test-conversation")
+	if aliceConversationErr != nil {
+		t.Fatalf("alice conversation-create failed: %v\n%s", aliceConversationErr, string(aliceConversationOutput))
+	}
+
+	addMemberOutput, addMemberErr := runOpenMLSSidecar(
+		"conversation-add-member",
+		"--device-label", "carbonstack-alice-device",
+		"--conversation-label", "carbonstack-test-conversation",
+		"--member-keypackage", bobBundleEnvelope.Data.KeyPackageArtifactPathHint,
+	)
+	if addMemberErr != nil {
+		t.Fatalf("conversation-add-member failed: %v\n%s", addMemberErr, string(addMemberOutput))
+	}
+
+	addMemberEnvelope := parseSidecarEnvelope(t, addMemberOutput)
+	if !addMemberEnvelope.OK {
+		t.Fatal("conversation-add-member ok = false, want true")
+	}
+
+	if addMemberEnvelope.Data.WelcomeArtifactPathHint == "" {
+		t.Fatal("conversation-add-member should return Welcome artifact path")
+	}
+
+	joinOutput, joinErr := runOpenMLSSidecar(
+		"conversation-join",
+		"--device-label", "carbonstack-bob-device",
+		"--conversation-label", "carbonstack-test-conversation",
+		"--welcome", addMemberEnvelope.Data.WelcomeArtifactPathHint,
+	)
+	if joinErr != nil {
+		t.Fatalf("conversation-join failed: %v\n%s", joinErr, string(joinOutput))
+	}
+
+	joinEnvelope := parseSidecarEnvelope(t, joinOutput)
+	if !joinEnvelope.OK {
+		t.Fatal("conversation-join ok = false, want true")
+	}
+
+	if !joinEnvelope.Data.Joined {
+		t.Fatal("conversation-join should report joined=true")
+	}
+
+	if joinEnvelope.Data.GroupIDRef != addMemberEnvelope.Data.GroupIDRef {
+		t.Fatalf("join group_id_ref = %q, add-member group_id_ref = %q", joinEnvelope.Data.GroupIDRef, addMemberEnvelope.Data.GroupIDRef)
+	}
+
+	protectOutput, protectErr := runOpenMLSSidecar(
+		"message-protect",
+		"--device-label", "carbonstack-alice-device",
+		"--conversation-label", "carbonstack-test-conversation",
+		"--plaintext", "hello bob",
+	)
+	if protectErr != nil {
+		t.Fatalf("message-protect failed: %v\n%s", protectErr, string(protectOutput))
+	}
+
+	protectEnvelope := parseSidecarEnvelope(t, protectOutput)
+	if !protectEnvelope.OK {
+		t.Fatal("message-protect ok = false, want true")
+	}
+
+	if protectEnvelope.Command != "message-protect" {
+		t.Fatalf("command = %q, want message-protect", protectEnvelope.Command)
+	}
+
+	assertProviderEnvelopeBase(t, protectEnvelope)
+
+	if protectEnvelope.Phase != "phase2d-message-protect-dev" {
+		t.Fatalf("phase = %q, want phase2d-message-protect-dev", protectEnvelope.Phase)
+	}
+
+	if protectEnvelope.PrivateMaterialIncluded {
+		t.Fatal("message-protect must not include private material")
+	}
+
+	if !protectEnvelope.Data.MessageProtected {
+		t.Fatal("message-protect should report message_protected=true")
+	}
+
+	if !protectEnvelope.Data.ProtectedMessageWritten {
+		t.Fatal("message-protect should report protected_message_written=true")
+	}
+
+	if !protectEnvelope.Data.ProviderStorageLoaded {
+		t.Fatal("message-protect should report provider_storage_loaded=true")
+	}
+
+	if !protectEnvelope.Data.ProviderStorageWritten {
+		t.Fatal("message-protect should report provider_storage_written=true")
+	}
+
+	if !protectEnvelope.Data.GroupReloadable {
+		t.Fatal("message-protect should report group_reloadable=true")
+	}
+
+	if protectEnvelope.Data.MessageArtifactPathHint == "" {
+		t.Fatal("message-protect should return message artifact path")
+	}
+
+	if protectEnvelope.Data.MessageManifestPathHint == "" {
+		t.Fatal("message-protect should return message manifest path")
+	}
+
+	if protectEnvelope.Data.MessageProtectSummaryPathHint == "" {
+		t.Fatal("message-protect should return message protect summary path")
+	}
+
+	if protectEnvelope.Data.MessageArtifactSHA256 == "" {
+		t.Fatal("message-protect should return message artifact sha256")
+	}
+
+	if protectEnvelope.Data.MessageArtifactSizeBytes <= 0 {
+		t.Fatalf("message-protect message artifact size = %d, want > 0", protectEnvelope.Data.MessageArtifactSizeBytes)
+	}
+
+	if protectEnvelope.Data.GroupIDRef != addMemberEnvelope.Data.GroupIDRef {
+		t.Fatalf("protect group_id_ref = %q, add-member group_id_ref = %q", protectEnvelope.Data.GroupIDRef, addMemberEnvelope.Data.GroupIDRef)
+	}
+
+	if protectEnvelope.Data.MemberCount != 2 {
+		t.Fatalf("message-protect member_count = %d, want 2", protectEnvelope.Data.MemberCount)
+	}
+
+	if protectEnvelope.Data.EpochBefore == "" {
+		t.Fatal("message-protect should report epoch_before")
+	}
+
+	if protectEnvelope.Data.EpochAfter == "" {
+		t.Fatal("message-protect should report epoch_after")
+	}
+
+	if len(protectEnvelope.Events) != 2 {
+		t.Fatalf("message-protect event count = %d, want 2", len(protectEnvelope.Events))
+	}
+
+	assertNoSecretMaterialInStdout(t, protectOutput)
+
+	assertFileExists(t, filepath.Join(openMLSSidecarDir, protectEnvelope.Data.MessageArtifactPathHint))
+	assertFileExists(t, filepath.Join(openMLSSidecarDir, protectEnvelope.Data.MessageManifestPathHint))
+	assertFileExists(t, filepath.Join(openMLSSidecarDir, protectEnvelope.Data.MessageProtectSummaryPathHint))
+
+	openOutput, openErr := runOpenMLSSidecar(
+		"message-open",
+		"--device-label", "carbonstack-bob-device",
+		"--conversation-label", "carbonstack-test-conversation",
+		"--message", protectEnvelope.Data.MessageArtifactPathHint,
+	)
+	if openErr != nil {
+		t.Fatalf("message-open failed: %v\n%s", openErr, string(openOutput))
+	}
+
+	openEnvelope := parseSidecarEnvelope(t, openOutput)
+	if !openEnvelope.OK {
+		t.Fatal("message-open ok = false, want true")
+	}
+
+	if openEnvelope.Command != "message-open" {
+		t.Fatalf("command = %q, want message-open", openEnvelope.Command)
+	}
+
+	assertProviderEnvelopeBase(t, openEnvelope)
+
+	if openEnvelope.Phase != "phase2d-message-open-dev" {
+		t.Fatalf("phase = %q, want phase2d-message-open-dev", openEnvelope.Phase)
+	}
+
+	if openEnvelope.PrivateMaterialIncluded {
+		t.Fatal("message-open must not include private material")
+	}
+
+	if !openEnvelope.Data.MessageOpened {
+		t.Fatal("message-open should report message_opened=true")
+	}
+
+	if openEnvelope.Data.PlaintextUTF8 != "hello bob" {
+		t.Fatalf("message-open plaintext_utf8 = %q, want hello bob", openEnvelope.Data.PlaintextUTF8)
+	}
+
+	if openEnvelope.Data.PlaintextLen != len("hello bob") {
+		t.Fatalf("message-open plaintext_len = %d, want %d", openEnvelope.Data.PlaintextLen, len("hello bob"))
+	}
+
+	if !openEnvelope.Data.ProviderStorageLoaded {
+		t.Fatal("message-open should report provider_storage_loaded=true")
+	}
+
+	if !openEnvelope.Data.ProviderStorageWritten {
+		t.Fatal("message-open should report provider_storage_written=true")
+	}
+
+	if !openEnvelope.Data.GroupReloadable {
+		t.Fatal("message-open should report group_reloadable=true")
+	}
+
+	if openEnvelope.Data.GroupIDRef != addMemberEnvelope.Data.GroupIDRef {
+		t.Fatalf("open group_id_ref = %q, add-member group_id_ref = %q", openEnvelope.Data.GroupIDRef, addMemberEnvelope.Data.GroupIDRef)
+	}
+
+	if openEnvelope.Data.MemberCount != 2 {
+		t.Fatalf("message-open member_count = %d, want 2", openEnvelope.Data.MemberCount)
+	}
+
+	if openEnvelope.Data.MessageOpenSummaryPathHint == "" {
+		t.Fatal("message-open should return message open summary path")
+	}
+
+	if len(openEnvelope.Events) != 2 {
+		t.Fatalf("message-open event count = %d, want 2", len(openEnvelope.Events))
+	}
+
+	assertNoSecretMaterialInStdout(t, openOutput)
+
+	assertFileExists(t, filepath.Join(openMLSSidecarDir, openEnvelope.Data.MessageOpenSummaryPathHint))
+
+	duplicateProtectOutput, duplicateProtectErr := runOpenMLSSidecar(
+		"message-protect",
+		"--device-label", "carbonstack-alice-device",
+		"--conversation-label", "carbonstack-test-conversation",
+		"--plaintext", "hello bob again",
+	)
+	assertExitCode(t, duplicateProtectErr, 3)
+
+	duplicateProtectEnvelope := parseSidecarEnvelope(t, duplicateProtectOutput)
+	if duplicateProtectEnvelope.OK {
+		t.Fatal("duplicate message-protect envelope ok = true, want false")
+	}
+
+	if duplicateProtectEnvelope.Error == nil {
+		t.Fatal("duplicate message-protect should include error")
+	}
+
+	if duplicateProtectEnvelope.Error.Code != "message_artifact_exists" {
+		t.Fatalf("duplicate message-protect error code = %q, want message_artifact_exists", duplicateProtectEnvelope.Error.Code)
+	}
+
+	assertNoSecretMaterialInStdout(t, duplicateProtectOutput)
 }
 func runOpenMLSSidecar(args ...string) ([]byte, error) {
 	sidecarDir := filepath.Clean(openMLSSidecarDir)

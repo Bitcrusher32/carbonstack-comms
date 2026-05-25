@@ -5,10 +5,11 @@ mod state;
 use labels::{validate_conversation_label, validate_device_label};
 use state::{
     ConversationAddMemberResult, ConversationCreateResult, ConversationJoinResult,
-    ConversationLoadCheckResult, IdentityCreateResult, IdentityStatusResult,
-    PublicBundleExportResult, add_dev_conversation_member, create_dev_conversation,
-    create_dev_identity, device_state_dir, export_dev_public_bundle_summary, join_dev_conversation,
-    load_dev_conversation_status, load_dev_identity_status,
+    ConversationLoadCheckResult, IdentityCreateResult, IdentityStatusResult, MessageOpenResult,
+    MessageProtectResult, PublicBundleExportResult, add_dev_conversation_member,
+    create_dev_conversation, create_dev_identity, device_state_dir,
+    export_dev_public_bundle_summary, join_dev_conversation, load_dev_conversation_status,
+    load_dev_identity_status, open_dev_message, protect_dev_message,
 };
 use std::env;
 use std::io;
@@ -23,6 +24,8 @@ const PHASE_PUBLIC_BUNDLE_EXPORT: &str = "phase2d-public-bundle-export-dev";
 const PHASE_CONVERSATION_CREATE: &str = "phase2d-conversation-create-dev";
 const PHASE_CONVERSATION_ADD_MEMBER: &str = "phase2d-conversation-add-member-dev";
 const PHASE_CONVERSATION_JOIN: &str = "phase2d-conversation-join-dev";
+const PHASE_MESSAGE_PROTECT: &str = "phase2d-message-protect-dev";
+const PHASE_MESSAGE_OPEN: &str = "phase2d-message-open-dev";
 
 const WARNINGS: [&str; 4] = [
     "OpenMLS is not wired into CarbonStackComms",
@@ -31,12 +34,7 @@ const WARNINGS: [&str; 4] = [
     "identity-create writes dev-only secret-bearing signer state but never prints private material",
 ];
 
-const UNSUPPORTED_COMMANDS: &[&str] = &[
-    "message-protect",
-    "message-open",
-    "state-checkpoint",
-    "state-load-check",
-];
+const UNSUPPORTED_COMMANDS: &[&str] = &["state-checkpoint", "state-load-check"];
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -50,6 +48,8 @@ fn main() {
         Some("conversation-load-check") => handle_conversation_load_check(&args[2..]),
         Some("conversation-add-member") => handle_conversation_add_member(&args[2..]),
         Some("conversation-join") => handle_conversation_join(&args[2..]),
+        Some("message-protect") => handle_message_protect(&args[2..]),
+        Some("message-open") => handle_message_open(&args[2..]),
         Some("--help") | Some("-h") | None => print_help(),
         Some(other) => {
             print_unsupported_command(other);
@@ -748,6 +748,487 @@ fn parse_welcome_artifact_path(args: &[String]) -> Option<&str> {
     None
 }
 
+fn parse_plaintext(args: &[String]) -> Option<&str> {
+    let mut index = 0;
+
+    while index < args.len() {
+        if args[index] == "--plaintext" {
+            return args.get(index + 1).map(String::as_str);
+        }
+
+        index += 1;
+    }
+
+    None
+}
+
+fn parse_message_artifact_path(args: &[String]) -> Option<&str> {
+    let mut index = 0;
+
+    while index < args.len() {
+        if args[index] == "--message" {
+            return args.get(index + 1).map(String::as_str);
+        }
+
+        index += 1;
+    }
+
+    None
+}
+
+fn handle_message_protect(args: &[String]) {
+    let Some(device_label) = parse_device_label(args) else {
+        print_message_protect_missing_argument("--device-label");
+        std::process::exit(2);
+    };
+
+    let Some(conversation_label) = parse_conversation_label(args) else {
+        print_message_protect_missing_argument("--conversation-label");
+        std::process::exit(2);
+    };
+
+    let Some(plaintext) = parse_plaintext(args) else {
+        print_message_protect_missing_argument("--plaintext");
+        std::process::exit(2);
+    };
+
+    if let Err(reason) = validate_device_label(device_label) {
+        print_message_command_invalid_label(
+            "message-protect",
+            PHASE_MESSAGE_PROTECT,
+            device_label,
+            conversation_label,
+            "invalid_device_label",
+            &reason,
+        );
+        std::process::exit(2);
+    }
+
+    if let Err(reason) = validate_conversation_label(conversation_label) {
+        print_message_command_invalid_label(
+            "message-protect",
+            PHASE_MESSAGE_PROTECT,
+            device_label,
+            conversation_label,
+            "invalid_conversation_label",
+            &reason,
+        );
+        std::process::exit(2);
+    }
+
+    match protect_dev_message(device_label, conversation_label, plaintext) {
+        Ok(result) => {
+            print_message_protect_success(&result);
+        }
+        Err(err) if err.kind() == io::ErrorKind::NotFound => {
+            print_message_command_failed(
+                "message-protect",
+                PHASE_MESSAGE_PROTECT,
+                device_label,
+                conversation_label,
+                "conversation_missing",
+                &err,
+                "provider.conversation.missing",
+                "warning",
+                false,
+            );
+            std::process::exit(3);
+        }
+        Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
+            print_message_command_failed(
+                "message-protect",
+                PHASE_MESSAGE_PROTECT,
+                device_label,
+                conversation_label,
+                "message_artifact_exists",
+                &err,
+                "provider.message.exists",
+                "warning",
+                false,
+            );
+            std::process::exit(3);
+        }
+        Err(err) if err.kind() == io::ErrorKind::InvalidInput => {
+            print_message_command_failed(
+                "message-protect",
+                PHASE_MESSAGE_PROTECT,
+                device_label,
+                conversation_label,
+                "invalid_plaintext",
+                &err,
+                "provider.command.invalid",
+                "warning",
+                false,
+            );
+            std::process::exit(2);
+        }
+        Err(err) => {
+            print_message_command_failed(
+                "message-protect",
+                PHASE_MESSAGE_PROTECT,
+                device_label,
+                conversation_label,
+                "message_protect_failed",
+                &err,
+                "checkpoint.failed",
+                "warning",
+                false,
+            );
+            std::process::exit(3);
+        }
+    }
+}
+
+fn handle_message_open(args: &[String]) {
+    let Some(device_label) = parse_device_label(args) else {
+        print_message_open_missing_argument("--device-label");
+        std::process::exit(2);
+    };
+
+    let Some(conversation_label) = parse_conversation_label(args) else {
+        print_message_open_missing_argument("--conversation-label");
+        std::process::exit(2);
+    };
+
+    let Some(message_artifact_path) = parse_message_artifact_path(args) else {
+        print_message_open_missing_argument("--message");
+        std::process::exit(2);
+    };
+
+    if let Err(reason) = validate_device_label(device_label) {
+        print_message_command_invalid_label(
+            "message-open",
+            PHASE_MESSAGE_OPEN,
+            device_label,
+            conversation_label,
+            "invalid_device_label",
+            &reason,
+        );
+        std::process::exit(2);
+    }
+
+    if let Err(reason) = validate_conversation_label(conversation_label) {
+        print_message_command_invalid_label(
+            "message-open",
+            PHASE_MESSAGE_OPEN,
+            device_label,
+            conversation_label,
+            "invalid_conversation_label",
+            &reason,
+        );
+        std::process::exit(2);
+    }
+
+    match open_dev_message(
+        device_label,
+        conversation_label,
+        std::path::Path::new(message_artifact_path),
+    ) {
+        Ok(result) => {
+            print_message_open_success(&result);
+        }
+        Err(err) if err.kind() == io::ErrorKind::NotFound => {
+            print_message_command_failed(
+                "message-open",
+                PHASE_MESSAGE_OPEN,
+                device_label,
+                conversation_label,
+                "conversation_or_message_missing",
+                &err,
+                "provider.conversation.missing",
+                "warning",
+                false,
+            );
+            std::process::exit(3);
+        }
+        Err(err) if err.kind() == io::ErrorKind::InvalidInput => {
+            print_message_command_failed(
+                "message-open",
+                PHASE_MESSAGE_OPEN,
+                device_label,
+                conversation_label,
+                "invalid_message_path",
+                &err,
+                "provider.command.invalid",
+                "warning",
+                false,
+            );
+            std::process::exit(2);
+        }
+        Err(err) if err.kind() == io::ErrorKind::InvalidData => {
+            print_message_command_failed(
+                "message-open",
+                PHASE_MESSAGE_OPEN,
+                device_label,
+                conversation_label,
+                "message_artifact_invalid",
+                &err,
+                "provider.message.invalid",
+                "warning",
+                false,
+            );
+            std::process::exit(3);
+        }
+        Err(err) => {
+            print_message_command_failed(
+                "message-open",
+                PHASE_MESSAGE_OPEN,
+                device_label,
+                conversation_label,
+                "message_open_failed",
+                &err,
+                "checkpoint.failed",
+                "warning",
+                false,
+            );
+            std::process::exit(3);
+        }
+    }
+}
+
+fn print_message_protect_success(result: &MessageProtectResult) {
+    let envelope = serde_json::json!({
+        "ok": true,
+        "command": "message-protect",
+        "provider": PROVIDER_NAME,
+        "implementation": IMPLEMENTATION,
+        "mode": MODE,
+        "phase": PHASE_MESSAGE_PROTECT,
+        "private_material_included": false,
+        "data": {
+            "device_label": result.device_label,
+            "conversation_label": result.conversation_label,
+            "message_label": result.message_label,
+            "conversation_state_path_hint": result.conversation_state_dir.to_string_lossy(),
+            "provider_storage_path_hint": result.provider_storage_path.to_string_lossy(),
+            "message_state_path_hint": result.message_dir.to_string_lossy(),
+            "message_artifact_path_hint": result.message_artifact_path.to_string_lossy(),
+            "message_manifest_path_hint": result.message_manifest_path.to_string_lossy(),
+            "message_protect_summary_path_hint": result.message_protect_summary_path.to_string_lossy(),
+            "message_artifact_sha256": result.message_artifact_sha256,
+            "message_artifact_size_bytes": result.message_artifact_size_bytes,
+            "group_id_ref": result.group_id_ref,
+            "member_count": result.member_count,
+            "epoch_before": result.epoch_before,
+            "epoch_after": result.epoch_after,
+            "provider_storage_loaded": result.provider_storage_loaded,
+            "provider_storage_written": result.provider_storage_written,
+            "group_reloadable": result.group_reloadable,
+            "message_protected": result.message_protected,
+            "protected_message_written": result.protected_message_written,
+            "state_scope": "dev-local-sidecar-state"
+        },
+        "events": [
+            {
+                "event": "message.protected",
+                "severity": "info",
+                "trust_relevant": false
+            },
+            {
+                "event": "storage.saved",
+                "severity": "info",
+                "trust_relevant": false
+            }
+        ],
+        "warnings": [
+            "dev-only OpenMLS message protect",
+            "plaintext was consumed locally but not stored in summary",
+            "protected message raw bytes were not printed",
+            "provider storage is dev-only and not production secure vault storage"
+        ]
+    });
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&envelope).expect("provider envelope JSON should serialize")
+    );
+}
+
+fn print_message_open_success(result: &MessageOpenResult) {
+    let envelope = serde_json::json!({
+        "ok": true,
+        "command": "message-open",
+        "provider": PROVIDER_NAME,
+        "implementation": IMPLEMENTATION,
+        "mode": MODE,
+        "phase": PHASE_MESSAGE_OPEN,
+        "private_material_included": false,
+        "data": {
+            "device_label": result.device_label,
+            "conversation_label": result.conversation_label,
+            "message_label": result.message_label,
+            "conversation_state_path_hint": result.conversation_state_dir.to_string_lossy(),
+            "provider_storage_path_hint": result.provider_storage_path.to_string_lossy(),
+            "message_artifact_path_hint": result.message_artifact_path.to_string_lossy(),
+            "message_open_summary_path_hint": result.message_open_summary_path.to_string_lossy(),
+            "plaintext_utf8": result.plaintext_utf8,
+            "plaintext_len": result.plaintext_len,
+            "group_id_ref": result.group_id_ref,
+            "member_count": result.member_count,
+            "epoch_before": result.epoch_before,
+            "epoch_after": result.epoch_after,
+            "provider_storage_loaded": result.provider_storage_loaded,
+            "provider_storage_written": result.provider_storage_written,
+            "group_reloadable": result.group_reloadable,
+            "message_opened": result.message_opened,
+            "state_scope": "dev-local-sidecar-state"
+        },
+        "events": [
+            {
+                "event": "message.opened",
+                "severity": "info",
+                "trust_relevant": false
+            },
+            {
+                "event": "storage.saved",
+                "severity": "info",
+                "trust_relevant": false
+            }
+        ],
+        "warnings": [
+            "dev-only OpenMLS message open",
+            "plaintext is returned only for bounded dev proof",
+            "provider storage is dev-only and not production secure vault storage"
+        ]
+    });
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&envelope).expect("provider envelope JSON should serialize")
+    );
+}
+
+fn print_message_protect_missing_argument(argument: &str) {
+    print_message_missing_argument("message-protect", PHASE_MESSAGE_PROTECT, argument);
+}
+
+fn print_message_open_missing_argument(argument: &str) {
+    print_message_missing_argument("message-open", PHASE_MESSAGE_OPEN, argument);
+}
+
+fn print_message_missing_argument(command: &str, phase: &str, argument: &str) {
+    let envelope = serde_json::json!({
+        "ok": false,
+        "command": command,
+        "provider": PROVIDER_NAME,
+        "implementation": IMPLEMENTATION,
+        "mode": MODE,
+        "phase": phase,
+        "private_material_included": false,
+        "error": {
+            "code": "missing_required_argument",
+            "message": format!("{command} requires {argument}")
+        },
+        "events": [
+            {
+                "event": "provider.command.invalid",
+                "severity": "warning",
+                "trust_relevant": false
+            }
+        ],
+        "warnings": [
+            "missing required message command argument",
+            "no private material printed"
+        ]
+    });
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&envelope).expect("provider envelope JSON should serialize")
+    );
+}
+
+fn print_message_command_invalid_label(
+    command: &str,
+    phase: &str,
+    device_label: &str,
+    conversation_label: &str,
+    code: &str,
+    reason: &str,
+) {
+    let envelope = serde_json::json!({
+        "ok": false,
+        "command": command,
+        "provider": PROVIDER_NAME,
+        "implementation": IMPLEMENTATION,
+        "mode": MODE,
+        "phase": phase,
+        "private_material_included": false,
+        "error": {
+            "code": code,
+            "message": reason
+        },
+        "data": {
+            "device_label": device_label,
+            "conversation_label": conversation_label
+        },
+        "events": [
+            {
+                "event": "provider.command.invalid",
+                "severity": "warning",
+                "trust_relevant": false
+            }
+        ],
+        "warnings": [
+            "invalid message command label",
+            "no private material printed"
+        ]
+    });
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&envelope).expect("provider envelope JSON should serialize")
+    );
+}
+
+fn print_message_command_failed(
+    command: &str,
+    phase: &str,
+    device_label: &str,
+    conversation_label: &str,
+    code: &str,
+    err: &io::Error,
+    provider_event: &str,
+    severity: &str,
+    trust_relevant: bool,
+) {
+    let envelope = serde_json::json!({
+        "ok": false,
+        "command": command,
+        "provider": PROVIDER_NAME,
+        "implementation": IMPLEMENTATION,
+        "mode": MODE,
+        "phase": phase,
+        "private_material_included": false,
+        "error": {
+            "code": code,
+            "message": err.to_string(),
+            "provider_event": provider_event,
+            "severity": severity,
+            "trust_relevant": trust_relevant
+        },
+        "data": {
+            "device_label": device_label,
+            "conversation_label": conversation_label
+        },
+        "events": [
+            {
+                "event": provider_event,
+                "severity": severity,
+                "trust_relevant": trust_relevant
+            }
+        ],
+        "warnings": [
+            "message command failed",
+            "no private material printed"
+        ]
+    });
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&envelope).expect("provider envelope JSON should serialize")
+    );
+}
 fn handle_conversation_join(args: &[String]) {
     let Some(device_label) = parse_device_label(args) else {
         print_conversation_join_missing_argument("--device-label");
@@ -1420,13 +1901,13 @@ fn print_provider_info() {
     "conversation-create",
     "conversation-load-check",
     "conversation-add-member",
-    "conversation-join"
+    "conversation-join",
+    "message-protect",
+    "message-open"
     ],
     "unsupported": [
 
   
-      "message-protect",
-      "message-open",
       "state-checkpoint",
       "state-load-check"
     ],
