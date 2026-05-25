@@ -34,6 +34,19 @@ const WARNINGS: [&str; 4] = [
     "identity-create writes dev-only secret-bearing signer state but never prints private material",
 ];
 
+const CAPABILITIES: &[&str] = &[
+    "provider-info",
+    "identity-create",
+    "identity-status",
+    "public-bundle-export",
+    "conversation-create",
+    "conversation-load-check",
+    "conversation-add-member",
+    "conversation-join",
+    "message-protect",
+    "message-open",
+];
+
 const UNSUPPORTED_COMMANDS: &[&str] = &["state-checkpoint", "state-load-check"];
 
 fn main() {
@@ -1884,56 +1897,34 @@ fn parse_device_label(args: &[String]) -> Option<&str> {
 }
 
 fn print_provider_info() {
-    println!(
-        r#"{{
-  "ok": true,
-  "command": "provider-info",
-  "provider": "{provider}",
-  "implementation": "{implementation}",
-  "mode": "{mode}",
-  "phase": "{phase}",
-  "data": {{
-    "capabilities": [
-      "provider-info",
-      "identity-create",
-    "identity-status",
-    "public-bundle-export",
-    "conversation-create",
-    "conversation-load-check",
-    "conversation-add-member",
-    "conversation-join",
-    "message-protect",
-    "message-open"
-    ],
-    "unsupported": [
+    let envelope = serde_json::json!({
+        "ok": true,
+        "command": "provider-info",
+        "provider": PROVIDER_NAME,
+        "implementation": IMPLEMENTATION,
+        "mode": MODE,
+        "phase": PHASE_PROVIDER_INFO,
+        "data": {
+            "capabilities": CAPABILITIES,
+            "unsupported": UNSUPPORTED_COMMANDS,
+            "security_level": "experimental; not production E2EE"
+        },
+        "events": [],
+        "warnings": [
+            WARNINGS[0],
+            WARNINGS[1],
+            WARNINGS[2],
+            WARNINGS[3],
+            "identity-create writes dev-only OpenMLS identity material locally but does not print private material"
+        ],
+        "private_material_included": false
+    });
 
-  
-      "state-checkpoint",
-      "state-load-check"
-    ],
-    "security_level": "experimental; not production E2EE"
-  }},
-  "events": [],
-  "warnings": [
-    "{warning0}",
-    "{warning1}",
-    "{warning2}",
-    "{warning3}",
-    "identity-create writes dev-only OpenMLS identity material locally but does not print private material"
-  ],
-  "private_material_included": false
-}}"#,
-        provider = PROVIDER_NAME,
-        implementation = IMPLEMENTATION,
-        mode = MODE,
-        phase = PHASE_PROVIDER_INFO,
-        warning0 = WARNINGS[0],
-        warning1 = WARNINGS[1],
-        warning2 = WARNINGS[2],
-        warning3 = WARNINGS[3],
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&envelope).expect("provider envelope JSON should serialize")
     );
 }
-
 fn print_unsupported_command(command: &str) {
     println!(
         r#"{{
@@ -2660,9 +2651,11 @@ mod tests {
         assert!(!UNSUPPORTED_COMMANDS.contains(&"identity-create"));
         assert!(!UNSUPPORTED_COMMANDS.contains(&"identity-status"));
         assert!(!UNSUPPORTED_COMMANDS.contains(&"public-bundle-export"));
-        assert!(UNSUPPORTED_COMMANDS.contains(&"message-protect"));
-        assert!(UNSUPPORTED_COMMANDS.contains(&"message-open"));
+        assert!(!UNSUPPORTED_COMMANDS.contains(&"message-protect"));
+        assert!(!UNSUPPORTED_COMMANDS.contains(&"message-open"));
         assert!(UNSUPPORTED_COMMANDS.contains(&"state-checkpoint"));
+        assert!(CAPABILITIES.contains(&"message-protect"));
+        assert!(CAPABILITIES.contains(&"message-open"));
     }
 
     #[test]
