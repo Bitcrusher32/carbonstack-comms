@@ -48,6 +48,8 @@ type openMLSSidecarProviderData struct {
 	ProviderStorageLoaded        bool     `json:"provider_storage_loaded"`
 	ProviderStoragePathHint      string   `json:"provider_storage_path_hint"`
 	GroupReloadable              bool     `json:"group_reloadable"`
+	Joined                       bool     `json:"joined"`
+	JoinSummaryPathHint          string   `json:"join_summary_path_hint"`
 	MemberAdded                  bool     `json:"member_added"`
 	WelcomeArtifactWritten       bool     `json:"welcome_artifact_written"`
 	PendingCommitMerged          bool     `json:"pending_commit_merged"`
@@ -131,8 +133,8 @@ func TestOpenMLSSidecarProviderInfoCommand(t *testing.T) {
 	assertStringPresent(t, envelope.Data.Capabilities, "conversation-create")
 	assertStringPresent(t, envelope.Data.Capabilities, "conversation-load-check")
 	assertStringPresent(t, envelope.Data.Capabilities, "conversation-add-member")
+	assertStringPresent(t, envelope.Data.Capabilities, "conversation-join")
 	unsupported := []string{
-		"conversation-join",
 		"message-protect",
 		"message-open",
 		"state-checkpoint",
@@ -161,7 +163,7 @@ func TestOpenMLSSidecarProviderInfoCommand(t *testing.T) {
 }
 
 func TestOpenMLSSidecarUnsupportedCommandEnvelope(t *testing.T) {
-	output, err := runOpenMLSSidecar("conversation-join")
+	output, err := runOpenMLSSidecar("message-protect")
 	assertExitCode(t, err, 2)
 
 	envelope := parseSidecarEnvelope(t, output)
@@ -170,8 +172,8 @@ func TestOpenMLSSidecarUnsupportedCommandEnvelope(t *testing.T) {
 		t.Fatal("unsupported command envelope ok = true, want false")
 	}
 
-	if envelope.Command != "conversation-join" {
-		t.Fatalf("command = %q, want conversation-join", envelope.Command)
+	if envelope.Command != "message-protect" {
+		t.Fatalf("command = %q, want message-protect", envelope.Command)
 	}
 
 	assertProviderEnvelopeBase(t, envelope)
@@ -687,8 +689,8 @@ func TestOpenMLSSidecarPublicBundleExportCreatesSummary(t *testing.T) {
 		t.Fatal("public-bundle-export must not claim full KeyPackage artifact was written in this rung")
 	}
 
-	if exportEnvelope.Data.ProviderStorageWritten {
-		t.Fatal("public-bundle-export must not claim provider storage was written")
+	if !exportEnvelope.Data.ProviderStorageWritten {
+		t.Fatal("public-bundle-export should report provider_storage_written=true because KeyPackage private provider state is needed for later Welcome consumption")
 	}
 
 	if exportEnvelope.PrivateMaterialIncluded {
@@ -814,8 +816,8 @@ func TestOpenMLSSidecarPublicBundleExportCreatesSummary(t *testing.T) {
 		t.Fatal("summary should report public_bundle_available=true")
 	}
 
-	if summary.ProviderStorageWritten {
-		t.Fatal("summary must not claim provider storage was written")
+	if !summary.ProviderStorageWritten {
+		t.Fatal("summary should report provider_storage_written=true after KeyPackage provider storage is saved")
 	}
 
 	if summary.PrivateMaterialIncluded {
@@ -894,8 +896,8 @@ func TestOpenMLSSidecarPublicBundleExportWritesArtifact(t *testing.T) {
 		t.Fatalf("artifact size = %d, want > 0", exportEnvelope.Data.KeyPackageArtifactSizeBytes)
 	}
 
-	if exportEnvelope.Data.ProviderStorageWritten {
-		t.Fatal("artifact export must not claim provider storage was written")
+	if !exportEnvelope.Data.ProviderStorageWritten {
+		t.Fatal("artifact export should report provider_storage_written=true because KeyPackage private provider state is needed for later Welcome consumption")
 	}
 
 	if exportEnvelope.PrivateMaterialIncluded {
@@ -1029,8 +1031,8 @@ func TestOpenMLSSidecarPublicBundleExportWritesArtifact(t *testing.T) {
 		t.Fatal("summary should report public_bundle_available=true")
 	}
 
-	if summary.ProviderStorageWritten {
-		t.Fatal("summary must not claim provider storage was written")
+	if !summary.ProviderStorageWritten {
+		t.Fatal("summary should report provider_storage_written=true after KeyPackage provider storage is saved")
 	}
 
 	if summary.PrivateMaterialIncluded {
@@ -1111,8 +1113,8 @@ func TestOpenMLSSidecarPublicBundleExportWritesArtifact(t *testing.T) {
 		t.Fatalf("manifest artifact size = %d, want envelope size %d", manifest.KeyPackageArtifactSizeBytes, exportEnvelope.Data.KeyPackageArtifactSizeBytes)
 	}
 
-	if manifest.ProviderStorageWritten {
-		t.Fatal("manifest must not claim provider storage was written")
+	if !manifest.ProviderStorageWritten {
+		t.Fatal("manifest should report provider_storage_written=true after KeyPackage provider storage is saved")
 	}
 
 	if manifest.PrivateMaterialIncluded {
@@ -1630,6 +1632,183 @@ func TestOpenMLSSidecarConversationAddMemberWelcomeExport(t *testing.T) {
 
 	if duplicateEnvelope.Error.Code != "add_member_artifact_exists" {
 		t.Fatalf("duplicate error code = %q, want add_member_artifact_exists", duplicateEnvelope.Error.Code)
+	}
+
+	assertNoSecretMaterialInStdout(t, duplicateOutput)
+}
+
+func TestOpenMLSSidecarConversationJoinWelcomeConsume(t *testing.T) {
+	removeOpenMLSSidecarState(t)
+
+	aliceIdentityOutput, aliceIdentityErr := runOpenMLSSidecar("identity-create", "--device-label", "carbonstack-alice-device")
+	if aliceIdentityErr != nil {
+		t.Fatalf("alice identity-create failed: %v\n%s", aliceIdentityErr, string(aliceIdentityOutput))
+	}
+
+	bobIdentityOutput, bobIdentityErr := runOpenMLSSidecar("identity-create", "--device-label", "carbonstack-bob-device")
+	if bobIdentityErr != nil {
+		t.Fatalf("bob identity-create failed: %v\n%s", bobIdentityErr, string(bobIdentityOutput))
+	}
+
+	bobBundleOutput, bobBundleErr := runOpenMLSSidecar("public-bundle-export", "--device-label", "carbonstack-bob-device", "--write-artifact")
+	if bobBundleErr != nil {
+		t.Fatalf("bob public-bundle-export failed: %v\n%s", bobBundleErr, string(bobBundleOutput))
+	}
+
+	bobBundleEnvelope := parseSidecarEnvelope(t, bobBundleOutput)
+
+	if !bobBundleEnvelope.OK {
+		t.Fatal("bob public-bundle-export ok = false, want true")
+	}
+
+	if !bobBundleEnvelope.Data.ProviderStorageWritten {
+		t.Fatal("bob public-bundle-export should persist provider storage for later Welcome consumption")
+	}
+
+	if bobBundleEnvelope.Data.KeyPackageArtifactPathHint == "" {
+		t.Fatal("bob public-bundle-export should return KeyPackage artifact path")
+	}
+
+	addMemberOutput, addMemberErr := runOpenMLSSidecar("conversation-create", "--device-label", "carbonstack-alice-device", "--conversation-label", "carbonstack-test-conversation")
+	if addMemberErr != nil {
+		t.Fatalf("alice conversation-create failed: %v\n%s", addMemberErr, string(addMemberOutput))
+	}
+
+	addMemberOutput, addMemberErr = runOpenMLSSidecar(
+		"conversation-add-member",
+		"--device-label", "carbonstack-alice-device",
+		"--conversation-label", "carbonstack-test-conversation",
+		"--member-keypackage", bobBundleEnvelope.Data.KeyPackageArtifactPathHint,
+	)
+	if addMemberErr != nil {
+		t.Fatalf("conversation-add-member failed: %v\n%s", addMemberErr, string(addMemberOutput))
+	}
+
+	addMemberEnvelope := parseSidecarEnvelope(t, addMemberOutput)
+
+	if !addMemberEnvelope.OK {
+		t.Fatal("conversation-add-member ok = false, want true")
+	}
+
+	if addMemberEnvelope.Data.WelcomeArtifactPathHint == "" {
+		t.Fatal("conversation-add-member should return Welcome artifact path")
+	}
+
+	joinOutput, joinErr := runOpenMLSSidecar(
+		"conversation-join",
+		"--device-label", "carbonstack-bob-device",
+		"--conversation-label", "carbonstack-test-conversation",
+		"--welcome", addMemberEnvelope.Data.WelcomeArtifactPathHint,
+	)
+	if joinErr != nil {
+		t.Fatalf("conversation-join failed: %v\n%s", joinErr, string(joinOutput))
+	}
+
+	joinEnvelope := parseSidecarEnvelope(t, joinOutput)
+
+	if !joinEnvelope.OK {
+		t.Fatal("conversation-join ok = false, want true")
+	}
+
+	if joinEnvelope.Command != "conversation-join" {
+		t.Fatalf("command = %q, want conversation-join", joinEnvelope.Command)
+	}
+
+	assertProviderEnvelopeBase(t, joinEnvelope)
+
+	if joinEnvelope.Phase != "phase2d-conversation-join-dev" {
+		t.Fatalf("phase = %q, want phase2d-conversation-join-dev", joinEnvelope.Phase)
+	}
+
+	if joinEnvelope.PrivateMaterialIncluded {
+		t.Fatal("conversation-join must not include private material")
+	}
+
+	if !joinEnvelope.Data.Joined {
+		t.Fatal("conversation-join should report joined=true")
+	}
+
+	if !joinEnvelope.Data.ProviderStorageWritten {
+		t.Fatal("conversation-join should report provider_storage_written=true")
+	}
+
+	if !joinEnvelope.Data.ProviderStorageLoaded {
+		t.Fatal("conversation-join should report provider_storage_loaded=true")
+	}
+
+	if !joinEnvelope.Data.GroupReloadable {
+		t.Fatal("conversation-join should report group_reloadable=true")
+	}
+
+	if joinEnvelope.Data.MemberCount != 2 {
+		t.Fatalf("conversation-join member_count = %d, want 2", joinEnvelope.Data.MemberCount)
+	}
+
+	if joinEnvelope.Data.Epoch == "" {
+		t.Fatal("conversation-join should report epoch")
+	}
+
+	if joinEnvelope.Data.GroupIDRef == "" {
+		t.Fatal("conversation-join should report group_id_ref")
+	}
+
+	if joinEnvelope.Data.GroupIDRef != addMemberEnvelope.Data.GroupIDRef {
+		t.Fatalf("join group_id_ref = %q, add-member group_id_ref = %q", joinEnvelope.Data.GroupIDRef, addMemberEnvelope.Data.GroupIDRef)
+	}
+
+	if joinEnvelope.Data.ConversationStatePathHint == "" {
+		t.Fatal("conversation-join should return device-scoped conversation state path hint")
+	}
+
+	if joinEnvelope.Data.ConversationSummaryPathHint == "" {
+		t.Fatal("conversation-join should return conversation summary path hint")
+	}
+
+	if joinEnvelope.Data.ProviderStoragePathHint == "" {
+		t.Fatal("conversation-join should return provider storage path hint")
+	}
+
+	if joinEnvelope.Data.JoinSummaryPathHint == "" {
+		t.Fatal("conversation-join should return join summary path hint")
+	}
+
+	if len(joinEnvelope.Events) != 2 {
+		t.Fatalf("conversation-join event count = %d, want 2", len(joinEnvelope.Events))
+	}
+
+	assertNoSecretMaterialInStdout(t, joinOutput)
+
+	joinedConversationStatePath := filepath.Join(openMLSSidecarDir, joinEnvelope.Data.ConversationStatePathHint)
+	joinedConversationStateInfo, joinedConversationStateErr := os.Stat(filepath.Clean(joinedConversationStatePath))
+	if joinedConversationStateErr != nil {
+		t.Fatalf("expected joined conversation state directory %s: %v", joinedConversationStatePath, joinedConversationStateErr)
+	}
+	if !joinedConversationStateInfo.IsDir() {
+		t.Fatalf("expected joined conversation state path %s to be a directory", joinedConversationStatePath)
+	}
+	assertFileExists(t, filepath.Join(openMLSSidecarDir, joinEnvelope.Data.ConversationSummaryPathHint))
+	assertFileExists(t, filepath.Join(openMLSSidecarDir, joinEnvelope.Data.ProviderStoragePathHint))
+	assertFileExists(t, filepath.Join(openMLSSidecarDir, joinEnvelope.Data.JoinSummaryPathHint))
+
+	duplicateOutput, duplicateErr := runOpenMLSSidecar(
+		"conversation-join",
+		"--device-label", "carbonstack-bob-device",
+		"--conversation-label", "carbonstack-test-conversation",
+		"--welcome", addMemberEnvelope.Data.WelcomeArtifactPathHint,
+	)
+	assertExitCode(t, duplicateErr, 3)
+
+	duplicateEnvelope := parseSidecarEnvelope(t, duplicateOutput)
+	if duplicateEnvelope.OK {
+		t.Fatal("duplicate conversation-join envelope ok = true, want false")
+	}
+
+	if duplicateEnvelope.Error == nil {
+		t.Fatal("duplicate conversation-join should include error")
+	}
+
+	if duplicateEnvelope.Error.Code != "conversation_already_exists" {
+		t.Fatalf("duplicate error code = %q, want conversation_already_exists", duplicateEnvelope.Error.Code)
 	}
 
 	assertNoSecretMaterialInStdout(t, duplicateOutput)

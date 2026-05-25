@@ -391,6 +391,10 @@ pub fn public_bundle_manifest_path(device_label: &str) -> PathBuf {
     device_state_dir(device_label).join("public-bundle-manifest.json")
 }
 
+pub fn device_provider_storage_path(device_label: &str) -> PathBuf {
+    device_state_dir(device_label).join("provider-storage.json")
+}
+
 pub fn export_dev_public_bundle_summary(
     device_label: &str,
     write_artifact: bool,
@@ -436,6 +440,20 @@ pub fn export_dev_public_bundle_summary(
     let public_bundle_summary_path = public_bundle_summary_path(device_label);
     let key_package_artifact_path = public_bundle_keypackage_artifact_path(device_label);
     let public_bundle_manifest_path = public_bundle_manifest_path(device_label);
+    let provider_storage_path = device_provider_storage_path(device_label);
+
+    if provider_storage_path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            format!(
+                "device provider storage already exists: {}",
+                provider_storage_path.display()
+            ),
+        ));
+    }
+
+    provider.save_storage_to_path(&provider_storage_path)?;
+    let provider_storage_written = true;
 
     let mut key_package_artifact_written = false;
     let mut public_bundle_manifest_written = false;
@@ -496,9 +514,9 @@ pub fn export_dev_public_bundle_summary(
                 key_package_artifact: artifact_file_name,
                 key_package_artifact_sha256: &artifact_sha256,
                 key_package_artifact_size_bytes: artifact_size,
-                provider_storage_written: false,
+                provider_storage_written,
                 private_material_included: false,
-                warning: "dev-only serialized public KeyPackage artifact; not final CarbonStack onboarding material",
+                warning: "dev-only serialized public KeyPackage artifact with dev provider storage; not final CarbonStack onboarding material",
             },
         )?;
 
@@ -533,10 +551,10 @@ pub fn export_dev_public_bundle_summary(
             public_bundle_manifest_written,
             public_bundle_manifest_path: public_bundle_manifest_path_string.as_deref(),
             public_bundle_available: true,
-            provider_storage_written: false,
+            provider_storage_written,
             private_material_included: false,
             warning: if write_artifact {
-                "dev-only public bundle summary with serialized public KeyPackage artifact; not final CarbonStack onboarding material"
+                "dev-only public bundle summary with serialized public KeyPackage artifact and dev provider storage; not final CarbonStack onboarding material"
             } else {
                 "dev-only public bundle summary; full serialized KeyPackage artifact is not exported in this rung"
             },
@@ -557,7 +575,7 @@ pub fn export_dev_public_bundle_summary(
         key_package_artifact_size_bytes,
         public_bundle_manifest_written,
         public_bundle_manifest_path: public_bundle_manifest_path_string,
-        provider_storage_written: false,
+        provider_storage_written,
     })
 }
 fn public_identity_ref(public_signature_key: &[u8]) -> String {
@@ -1177,5 +1195,318 @@ pub fn add_dev_conversation_member(
         epoch_after,
         welcome_artifact_sha256: welcome_sha256,
         welcome_artifact_size_bytes: welcome_size,
+    })
+}
+
+pub fn device_conversations_dir(device_label: &str) -> PathBuf {
+    device_state_dir(device_label).join("conversations")
+}
+
+pub fn device_conversation_state_dir(device_label: &str, conversation_label: &str) -> PathBuf {
+    device_conversations_dir(device_label).join(conversation_label)
+}
+
+pub fn device_conversation_summary_path(device_label: &str, conversation_label: &str) -> PathBuf {
+    device_conversation_state_dir(device_label, conversation_label)
+        .join("conversation-summary.json")
+}
+
+pub fn device_conversation_provider_storage_path(
+    device_label: &str,
+    conversation_label: &str,
+) -> PathBuf {
+    device_conversation_state_dir(device_label, conversation_label).join("provider-storage.json")
+}
+
+pub fn device_conversation_join_summary_path(
+    device_label: &str,
+    conversation_label: &str,
+) -> PathBuf {
+    device_conversation_state_dir(device_label, conversation_label).join("join-summary.json")
+}
+
+#[derive(Debug, Clone)]
+pub struct ConversationJoinResult {
+    pub device_label: String,
+    pub conversation_label: String,
+    pub welcome_artifact_path: PathBuf,
+    pub conversation_state_dir: PathBuf,
+    pub conversation_summary_path: PathBuf,
+    pub provider_storage_path: PathBuf,
+    pub join_summary_path: PathBuf,
+    pub group_id_ref: String,
+    pub group_id_len: usize,
+    pub provider_storage_written: bool,
+    pub provider_storage_loaded: bool,
+    pub group_reloadable: bool,
+    pub joined: bool,
+    pub member_count: usize,
+    pub epoch: String,
+}
+
+#[derive(Serialize)]
+struct JoinedConversationSummary<'a> {
+    summary_version: &'a str,
+    device_label: &'a str,
+    conversation_label: &'a str,
+    state_scope: &'a str,
+    group_id_ref: &'a str,
+    group_id_len: usize,
+    provider_storage_written: bool,
+    provider_storage_loaded: bool,
+    group_reloadable: bool,
+    joined: bool,
+    member_count: usize,
+    epoch: &'a str,
+    provider_storage_file: &'a str,
+    private_material_included: bool,
+    warning: &'a str,
+}
+
+#[derive(Serialize)]
+struct JoinSummary<'a> {
+    summary_version: &'a str,
+    device_label: &'a str,
+    conversation_label: &'a str,
+    state_scope: &'a str,
+    welcome_artifact_path_hint: &'a str,
+    group_id_ref: &'a str,
+    group_id_len: usize,
+    provider_storage_written: bool,
+    provider_storage_loaded: bool,
+    group_reloadable: bool,
+    joined: bool,
+    member_count: usize,
+    epoch: &'a str,
+    provider_storage_file: &'a str,
+    private_material_included: bool,
+    warning: &'a str,
+}
+
+fn validate_welcome_artifact_path(path: &Path) -> io::Result<()> {
+    if path.as_os_str().is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Welcome artifact path is empty",
+        ));
+    }
+
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("");
+
+    let forbidden = [
+        "signer.json",
+        "provider-storage.json",
+        "conversation-summary.json",
+        "identity-state.json",
+        "identity-summary.json",
+        "identity-prep.json",
+        "public-bundle-summary.json",
+        "public-bundle-manifest.json",
+        "public-bundle.keypackage.bin",
+        "add-member-summary.json",
+        "welcome-manifest.json",
+    ];
+
+    if forbidden.iter().any(|blocked| *blocked == file_name) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("refusing Welcome artifact path with forbidden file name: {file_name}"),
+        ));
+    }
+
+    let metadata = fs::metadata(path)?;
+
+    if !metadata.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Welcome artifact path is not a file",
+        ));
+    }
+
+    if metadata.len() == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Welcome artifact is empty",
+        ));
+    }
+
+    const MAX_WELCOME_ARTIFACT_BYTES: u64 = 1024 * 1024;
+
+    if metadata.len() > MAX_WELCOME_ARTIFACT_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Welcome artifact is too large",
+        ));
+    }
+
+    Ok(())
+}
+
+pub fn join_dev_conversation(
+    device_label: &str,
+    conversation_label: &str,
+    welcome_artifact_path: &Path,
+) -> io::Result<ConversationJoinResult> {
+    let _status = load_dev_identity_status(device_label)?;
+
+    validate_welcome_artifact_path(welcome_artifact_path)?;
+
+    let conversation_state_dir = device_conversation_state_dir(device_label, conversation_label);
+    let conversation_summary_path =
+        device_conversation_summary_path(device_label, conversation_label);
+    let provider_storage_path =
+        device_conversation_provider_storage_path(device_label, conversation_label);
+    let join_summary_path = device_conversation_join_summary_path(device_label, conversation_label);
+
+    if conversation_state_dir.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "joined conversation state already exists",
+        ));
+    }
+
+    fs::create_dir_all(&conversation_state_dir)?;
+
+    let welcome_bytes = fs::read(welcome_artifact_path)?;
+    let mut welcome_slice = welcome_bytes.as_slice();
+
+    let mls_message_in = MlsMessageIn::tls_deserialize(&mut welcome_slice).map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Welcome carrier deserialization failed: {err:?}"),
+        )
+    })?;
+
+    let welcome = match mls_message_in.extract() {
+        MlsMessageBodyIn::Welcome(welcome) => welcome,
+        _ => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Welcome artifact did not contain an MLS Welcome message",
+            ));
+        }
+    };
+
+    let mut provider = CarbonStackSidecarProvider::default();
+    let device_provider_storage_path = device_provider_storage_path(device_label);
+
+    if !device_provider_storage_path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "device provider storage is missing; export a public bundle artifact before joining",
+        ));
+    }
+
+    provider.load_storage_from_path(&device_provider_storage_path)?;
+
+    let join_config = MlsGroupJoinConfig::builder().build();
+
+    let staged_welcome = StagedWelcome::new_from_welcome(&provider, &join_config, welcome, None)
+        .map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("conversation join staging failed: {err:?}"),
+            )
+        })?;
+
+    let group = staged_welcome.into_group(&provider).map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("conversation join into_group failed: {err:?}"),
+        )
+    })?;
+
+    let member_count = group.members().count();
+    let epoch = format!("{:?}", group.epoch());
+    let group_id_bytes = group.group_id().as_slice().to_vec();
+    let group_id_ref = format!("sha256:{}", hex::encode(Sha256::digest(&group_id_bytes)));
+    let group_id_len = group_id_bytes.len();
+
+    provider.save_storage_to_path(&provider_storage_path)?;
+
+    let mut reloaded_provider = CarbonStackSidecarProvider::default();
+    reloaded_provider.load_storage_from_path(&provider_storage_path)?;
+
+    let reloaded_group = MlsGroup::load(reloaded_provider.storage(), group.group_id())
+        .map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("joined conversation group reload failed: {err:?}"),
+            )
+        })?
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "joined conversation group not found in provider storage",
+            )
+        })?;
+
+    let reloaded_member_count = reloaded_group.members().count();
+    let reloaded_epoch = format!("{:?}", reloaded_group.epoch());
+
+    let welcome_artifact_path_hint = welcome_artifact_path.to_string_lossy();
+
+    write_json_file(
+        &conversation_summary_path,
+        &JoinedConversationSummary {
+            summary_version: "joined-conversation-summary/v0",
+            device_label,
+            conversation_label,
+            state_scope: "dev-local-sidecar-state",
+            group_id_ref: &group_id_ref,
+            group_id_len,
+            provider_storage_written: true,
+            provider_storage_loaded: true,
+            group_reloadable: true,
+            joined: true,
+            member_count: reloaded_member_count,
+            epoch: &reloaded_epoch,
+            provider_storage_file: "provider-storage.json",
+            private_material_included: false,
+            warning: "dev-only OpenMLS joined conversation summary; not production secure storage",
+        },
+    )?;
+
+    write_json_file(
+        &join_summary_path,
+        &JoinSummary {
+            summary_version: "join-summary/v0",
+            device_label,
+            conversation_label,
+            state_scope: "dev-local-sidecar-state",
+            welcome_artifact_path_hint: &welcome_artifact_path_hint,
+            group_id_ref: &group_id_ref,
+            group_id_len,
+            provider_storage_written: true,
+            provider_storage_loaded: true,
+            group_reloadable: true,
+            joined: true,
+            member_count: reloaded_member_count,
+            epoch: &reloaded_epoch,
+            provider_storage_file: "provider-storage.json",
+            private_material_included: false,
+            warning: "dev-only OpenMLS join summary; Welcome consumed locally but not printed",
+        },
+    )?;
+
+    Ok(ConversationJoinResult {
+        device_label: device_label.to_string(),
+        conversation_label: conversation_label.to_string(),
+        welcome_artifact_path: welcome_artifact_path.to_path_buf(),
+        conversation_state_dir,
+        conversation_summary_path,
+        provider_storage_path,
+        join_summary_path,
+        group_id_ref,
+        group_id_len,
+        provider_storage_written: true,
+        provider_storage_loaded: true,
+        group_reloadable: true,
+        joined: true,
+        member_count,
+        epoch,
     })
 }
