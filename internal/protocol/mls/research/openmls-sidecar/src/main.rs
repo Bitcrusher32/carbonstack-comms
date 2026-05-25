@@ -9,7 +9,7 @@ use state::{
     MessageProtectResult, PublicBundleExportResult, add_dev_conversation_member,
     create_dev_conversation, create_dev_identity, device_state_dir,
     export_dev_public_bundle_summary, join_dev_conversation, load_dev_conversation_status,
-    load_dev_identity_status, open_dev_message, protect_dev_message,
+    load_dev_identity_status, open_dev_message, protect_dev_message, validate_message_label,
 };
 use std::env;
 use std::io;
@@ -789,6 +789,19 @@ fn parse_message_artifact_path(args: &[String]) -> Option<&str> {
     None
 }
 
+fn parse_message_label(args: &[String]) -> Option<&str> {
+    let mut index = 0;
+
+    while index < args.len() {
+        if args[index] == "--message-label" {
+            return args.get(index + 1).map(String::as_str);
+        }
+
+        index += 1;
+    }
+
+    None
+}
 fn handle_message_protect(args: &[String]) {
     let Some(device_label) = parse_device_label(args) else {
         print_message_protect_missing_argument("--device-label");
@@ -804,6 +817,20 @@ fn handle_message_protect(args: &[String]) {
         print_message_protect_missing_argument("--plaintext");
         std::process::exit(2);
     };
+
+    let message_label = parse_message_label(args).unwrap_or("message-0001");
+
+    if let Err(reason) = validate_message_label(message_label) {
+        print_message_command_invalid_label(
+            "message-protect",
+            PHASE_MESSAGE_PROTECT,
+            device_label,
+            conversation_label,
+            "invalid_message_label",
+            &reason.to_string(),
+        );
+        std::process::exit(2);
+    }
 
     if let Err(reason) = validate_device_label(device_label) {
         print_message_command_invalid_label(
@@ -829,7 +856,7 @@ fn handle_message_protect(args: &[String]) {
         std::process::exit(2);
     }
 
-    match protect_dev_message(device_label, conversation_label, plaintext) {
+    match protect_dev_message(device_label, conversation_label, message_label, plaintext) {
         Ok(result) => {
             print_message_protect_success(&result);
         }
@@ -908,6 +935,20 @@ fn handle_message_open(args: &[String]) {
         std::process::exit(2);
     };
 
+    let message_label = parse_message_label(args).unwrap_or("message-0001");
+
+    if let Err(reason) = validate_message_label(message_label) {
+        print_message_command_invalid_label(
+            "message-open",
+            PHASE_MESSAGE_OPEN,
+            device_label,
+            conversation_label,
+            "invalid_message_label",
+            &reason.to_string(),
+        );
+        std::process::exit(2);
+    }
+
     if let Err(reason) = validate_device_label(device_label) {
         print_message_command_invalid_label(
             "message-open",
@@ -935,6 +976,7 @@ fn handle_message_open(args: &[String]) {
     match open_dev_message(
         device_label,
         conversation_label,
+        message_label,
         std::path::Path::new(message_artifact_path),
     ) {
         Ok(result) => {

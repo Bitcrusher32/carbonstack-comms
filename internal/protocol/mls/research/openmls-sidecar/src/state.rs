@@ -1,4 +1,4 @@
-use crate::provider::CarbonStackSidecarProvider;
+﻿use crate::provider::CarbonStackSidecarProvider;
 use openmls::key_packages::KeyPackageIn;
 use openmls::prelude::*;
 use openmls::versions::ProtocolVersion;
@@ -1661,6 +1661,100 @@ struct MessageOpenSummary<'a> {
     warning: &'a str,
 }
 
+pub fn validate_message_label(label: &str) -> io::Result<()> {
+    if label.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "message label is empty",
+        ));
+    }
+
+    if label.len() > 64 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "message label is too long",
+        ));
+    }
+
+    if label.starts_with('.') {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "message label must not start with dot",
+        ));
+    }
+
+    if label.contains('/') || label.contains('\\') {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "message label must not contain path separators",
+        ));
+    }
+
+    if !label
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "message label must contain only ASCII letters, numbers, hyphen, or underscore",
+        ));
+    }
+
+    let lower = label.to_ascii_lowercase();
+    let reserved = [
+        "signer",
+        "signer-json",
+        "provider-storage",
+        "provider-storage-json",
+        "identity-state",
+        "identity-summary",
+        "identity-prep",
+        "public-bundle",
+        "public-bundle-summary",
+        "public-bundle-manifest",
+        "public-bundle-keypackage",
+        "welcome",
+        "welcome-manifest",
+        "add-member-summary",
+        "join-summary",
+        "conversation-summary",
+        "message-manifest",
+        "message-protect-summary",
+        "message-open-summary",
+        "application-message",
+        "con",
+        "prn",
+        "aux",
+        "nul",
+        "com1",
+        "com2",
+        "com3",
+        "com4",
+        "com5",
+        "com6",
+        "com7",
+        "com8",
+        "com9",
+        "lpt1",
+        "lpt2",
+        "lpt3",
+        "lpt4",
+        "lpt5",
+        "lpt6",
+        "lpt7",
+        "lpt8",
+        "lpt9",
+    ];
+
+    if reserved.contains(&lower.as_str()) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "message label is reserved",
+        ));
+    }
+
+    Ok(())
+}
 fn validate_plaintext_for_dev(plaintext: &str) -> io::Result<()> {
     if plaintext.is_empty() {
         return Err(io::Error::new(
@@ -1748,8 +1842,10 @@ fn validate_message_artifact_path(path: &Path) -> io::Result<()> {
 pub fn protect_dev_message(
     device_label: &str,
     conversation_label: &str,
+    message_label: &str,
     plaintext: &str,
 ) -> io::Result<MessageProtectResult> {
+    validate_message_label(message_label)?;
     validate_plaintext_for_dev(plaintext)?;
 
     let status = load_dev_identity_status(device_label)?;
@@ -1768,7 +1864,6 @@ pub fn protect_dev_message(
         ));
     }
 
-    let message_label = "message-0001";
     let message_dir = conversation_message_dir(conversation_label, message_label);
     let message_artifact_path =
         conversation_message_artifact_path(conversation_label, message_label);
@@ -1928,8 +2023,10 @@ pub fn protect_dev_message(
 pub fn open_dev_message(
     device_label: &str,
     conversation_label: &str,
+    message_label: &str,
     message_artifact_path: &Path,
 ) -> io::Result<MessageOpenResult> {
+    validate_message_label(message_label)?;
     validate_message_artifact_path(message_artifact_path)?;
 
     let conversation_state_dir = device_conversation_state_dir(device_label, conversation_label);
@@ -1943,7 +2040,6 @@ pub fn open_dev_message(
         ));
     }
 
-    let message_label = "message-0001";
     let message_open_summary_path = device_conversation_message_open_summary_path(
         device_label,
         conversation_label,
