@@ -1,12 +1,14 @@
-﻿use crate::provider::CarbonStackSidecarProvider;
+use crate::provider::CarbonStackSidecarProvider;
+use openmls::key_packages::KeyPackageIn;
 use openmls::prelude::*;
+use openmls::versions::ProtocolVersion;
 use openmls_basic_credential::SignatureKeyPair;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
-use tls_codec::Serialize as TlsSerializeTrait;
+use tls_codec::{Deserialize as TlsDeserializeTrait, Serialize as TlsSerializeTrait};
 
 pub const STATE_ROOT: &str = ".carbonstack-openmls-sidecar-state";
 pub const DEV_SCOPE: &str = "dev";
@@ -827,5 +829,353 @@ pub fn load_dev_conversation_status(
         epoch: format!("{:?}", group.epoch()),
         provider_storage_loaded: true,
         group_reloadable: true,
+    })
+}
+
+pub fn conversation_welcome_artifact_path(conversation_label: &str) -> PathBuf {
+    conversation_state_dir(conversation_label).join("welcome.bin")
+}
+
+pub fn conversation_welcome_manifest_path(conversation_label: &str) -> PathBuf {
+    conversation_state_dir(conversation_label).join("welcome-manifest.json")
+}
+
+pub fn conversation_add_member_summary_path(conversation_label: &str) -> PathBuf {
+    conversation_state_dir(conversation_label).join("add-member-summary.json")
+}
+
+#[derive(Debug, Clone)]
+pub struct ConversationAddMemberResult {
+    pub device_label: String,
+    pub conversation_label: String,
+    pub member_keypackage_path: PathBuf,
+    pub conversation_state_dir: PathBuf,
+    pub conversation_summary_path: PathBuf,
+    pub provider_storage_path: PathBuf,
+    pub welcome_artifact_path: PathBuf,
+    pub welcome_manifest_path: PathBuf,
+    pub add_member_summary_path: PathBuf,
+    pub group_id_ref: String,
+    pub group_id_len: usize,
+    pub provider_storage_loaded: bool,
+    pub provider_storage_written: bool,
+    pub group_reloadable: bool,
+    pub member_added: bool,
+    pub welcome_artifact_written: bool,
+    pub pending_commit_merged: bool,
+    pub member_count_before: usize,
+    pub member_count_after: usize,
+    pub epoch_before: String,
+    pub epoch_after: String,
+    pub welcome_artifact_sha256: String,
+    pub welcome_artifact_size_bytes: usize,
+}
+
+#[derive(Serialize)]
+struct WelcomeManifest<'a> {
+    manifest_version: &'a str,
+    device_label: &'a str,
+    conversation_label: &'a str,
+    state_scope: &'a str,
+    artifact_file: &'a str,
+    artifact_sha256: &'a str,
+    artifact_size_bytes: usize,
+    member_keypackage_path_hint: &'a str,
+    provider_storage_file: &'a str,
+    private_material_included: bool,
+    warning: &'a str,
+}
+
+#[derive(Serialize)]
+struct AddMemberSummary<'a> {
+    summary_version: &'a str,
+    device_label: &'a str,
+    conversation_label: &'a str,
+    state_scope: &'a str,
+    group_id_ref: &'a str,
+    group_id_len: usize,
+    provider_storage_loaded: bool,
+    provider_storage_written: bool,
+    group_reloadable: bool,
+    member_added: bool,
+    welcome_artifact_written: bool,
+    pending_commit_merged: bool,
+    member_count_before: usize,
+    member_count_after: usize,
+    epoch_before: &'a str,
+    epoch_after: &'a str,
+    welcome_artifact_file: &'a str,
+    welcome_artifact_sha256: &'a str,
+    welcome_artifact_size_bytes: usize,
+    provider_storage_file: &'a str,
+    private_material_included: bool,
+    warning: &'a str,
+}
+
+fn validate_member_keypackage_path(path: &Path) -> io::Result<()> {
+    if path.as_os_str().is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "member key package path is empty",
+        ));
+    }
+
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("");
+
+    let forbidden = [
+        "signer.json",
+        "provider-storage.json",
+        "conversation-summary.json",
+        "identity-state.json",
+        "identity-summary.json",
+        "identity-prep.json",
+        "public-bundle-summary.json",
+        "public-bundle-manifest.json",
+    ];
+
+    if forbidden.iter().any(|blocked| *blocked == file_name) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("refusing member key package path with forbidden file name: {file_name}"),
+        ));
+    }
+
+    let metadata = fs::metadata(path)?;
+
+    if !metadata.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "member key package path is not a file",
+        ));
+    }
+
+    if metadata.len() == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "member key package artifact is empty",
+        ));
+    }
+
+    const MAX_KEYPACKAGE_ARTIFACT_BYTES: u64 = 1024 * 1024;
+
+    if metadata.len() > MAX_KEYPACKAGE_ARTIFACT_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "member key package artifact is too large",
+        ));
+    }
+
+    Ok(())
+}
+
+pub fn add_dev_conversation_member(
+    device_label: &str,
+    conversation_label: &str,
+    member_keypackage_path: &Path,
+) -> io::Result<ConversationAddMemberResult> {
+    let status = load_dev_identity_status(device_label)?;
+
+    validate_member_keypackage_path(member_keypackage_path)?;
+
+    let conversation_state_dir = conversation_state_dir(conversation_label);
+    let conversation_summary_path = conversation_summary_path(conversation_label);
+    let provider_storage_path = conversation_provider_storage_path(conversation_label);
+    let welcome_artifact_path = conversation_welcome_artifact_path(conversation_label);
+    let welcome_manifest_path = conversation_welcome_manifest_path(conversation_label);
+    let add_member_summary_path = conversation_add_member_summary_path(conversation_label);
+
+    if !conversation_summary_path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "conversation summary is missing",
+        ));
+    }
+
+    if !provider_storage_path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "conversation provider storage is missing",
+        ));
+    }
+
+    if welcome_artifact_path.exists()
+        || welcome_manifest_path.exists()
+        || add_member_summary_path.exists()
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "add-member output artifacts already exist",
+        ));
+    }
+
+    let signer: SignatureKeyPair = read_json_file(&status.signer_path).map_err(|err| {
+        io::Error::new(io::ErrorKind::Other, format!("signer load failed: {err}"))
+    })?;
+
+    let mut provider = CarbonStackSidecarProvider::default();
+    provider.load_storage_from_path(&provider_storage_path)?;
+
+    let group_id_bytes = format!("carbonstack-openmls-dev-conversation:{conversation_label}");
+    let group_id = GroupId::from_slice(group_id_bytes.as_bytes());
+
+    let mut group = MlsGroup::load(provider.storage(), &group_id)
+        .map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("conversation group reload failed: {err:?}"),
+            )
+        })?
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "conversation group not found in provider storage",
+            )
+        })?;
+
+    let member_count_before = group.members().count();
+    let epoch_before = format!("{:?}", group.epoch());
+
+    let key_package_bytes = fs::read(member_keypackage_path)?;
+    let mut key_package_slice = key_package_bytes.as_slice();
+
+    let key_package_in = KeyPackageIn::tls_deserialize(&mut key_package_slice).map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("member key package TLS deserialization failed: {err:?}"),
+        )
+    })?;
+
+    let member_key_package = key_package_in
+        .validate(provider.crypto(), ProtocolVersion::default())
+        .map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("member key package validation failed: {err:?}"),
+            )
+        })?;
+
+    let (_commit_message, welcome_message, _group_info) = group
+        .add_members(&provider, &signer, &[member_key_package])
+        .map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("conversation add-member failed: {err:?}"),
+            )
+        })?;
+
+    if !matches!(welcome_message.body(), MlsMessageBodyOut::Welcome(_)) {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "add_members did not return a Welcome message",
+        ));
+    }
+
+    let welcome_bytes = welcome_message.to_bytes().map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("Welcome message serialization failed: {err:?}"),
+        )
+    })?;
+
+    let welcome_digest = Sha256::digest(&welcome_bytes);
+    let welcome_sha256 = format!("sha256:{}", hex::encode(welcome_digest));
+    let welcome_size = welcome_bytes.len();
+
+    fs::write(&welcome_artifact_path, &welcome_bytes)?;
+
+    group.merge_pending_commit(&provider).map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("merge pending commit failed: {err:?}"),
+        )
+    })?;
+
+    let member_count_after = group.members().count();
+    let epoch_after = format!("{:?}", group.epoch());
+
+    provider.save_storage_to_path(&provider_storage_path)?;
+
+    let member_keypackage_path_hint = member_keypackage_path.to_string_lossy();
+
+    write_json_file(
+        &welcome_manifest_path,
+        &WelcomeManifest {
+            manifest_version: "welcome-manifest/v0",
+            device_label,
+            conversation_label,
+            state_scope: "dev-local-sidecar-state",
+            artifact_file: "welcome.bin",
+            artifact_sha256: &welcome_sha256,
+            artifact_size_bytes: welcome_size,
+            member_keypackage_path_hint: &member_keypackage_path_hint,
+            provider_storage_file: "provider-storage.json",
+            private_material_included: false,
+            warning: "dev-only OpenMLS Welcome carrier artifact; not production onboarding format",
+        },
+    )?;
+
+    write_json_file(
+        &add_member_summary_path,
+        &AddMemberSummary {
+            summary_version: "add-member-summary/v0",
+            device_label,
+            conversation_label,
+            state_scope: "dev-local-sidecar-state",
+            group_id_ref: &format!(
+                "sha256:{}",
+                hex::encode(Sha256::digest(group_id_bytes.as_bytes()))
+            ),
+            group_id_len: group_id_bytes.as_bytes().len(),
+            provider_storage_loaded: true,
+            provider_storage_written: true,
+            group_reloadable: true,
+            member_added: true,
+            welcome_artifact_written: true,
+            pending_commit_merged: true,
+            member_count_before,
+            member_count_after,
+            epoch_before: &epoch_before,
+            epoch_after: &epoch_after,
+            welcome_artifact_file: "welcome.bin",
+            welcome_artifact_sha256: &welcome_sha256,
+            welcome_artifact_size_bytes: welcome_size,
+            provider_storage_file: "provider-storage.json",
+            private_material_included: false,
+            warning: "dev-only OpenMLS add-member summary; not production membership UX or secure storage",
+        },
+    )?;
+
+    let group_id_ref = format!(
+        "sha256:{}",
+        hex::encode(Sha256::digest(group_id_bytes.as_bytes()))
+    );
+
+    Ok(ConversationAddMemberResult {
+        device_label: device_label.to_string(),
+        conversation_label: conversation_label.to_string(),
+        member_keypackage_path: member_keypackage_path.to_path_buf(),
+        conversation_state_dir,
+        conversation_summary_path,
+        provider_storage_path,
+        welcome_artifact_path,
+        welcome_manifest_path,
+        add_member_summary_path,
+        group_id_ref,
+        group_id_len: group_id_bytes.as_bytes().len(),
+        provider_storage_loaded: true,
+        provider_storage_written: true,
+        group_reloadable: true,
+        member_added: true,
+        welcome_artifact_written: true,
+        pending_commit_merged: true,
+        member_count_before,
+        member_count_after,
+        epoch_before,
+        epoch_after,
+        welcome_artifact_sha256: welcome_sha256,
+        welcome_artifact_size_bytes: welcome_size,
     })
 }

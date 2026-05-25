@@ -1,13 +1,13 @@
-﻿mod labels;
+mod labels;
 mod provider;
 mod state;
 
 use labels::{validate_conversation_label, validate_device_label};
 use state::{
-    ConversationCreateResult, ConversationLoadCheckResult, IdentityCreateResult,
-    IdentityStatusResult, PublicBundleExportResult, create_dev_conversation, create_dev_identity,
-    device_state_dir, export_dev_public_bundle_summary, load_dev_conversation_status,
-    load_dev_identity_status,
+    ConversationAddMemberResult, ConversationCreateResult, ConversationLoadCheckResult,
+    IdentityCreateResult, IdentityStatusResult, PublicBundleExportResult,
+    add_dev_conversation_member, create_dev_conversation, create_dev_identity, device_state_dir,
+    export_dev_public_bundle_summary, load_dev_conversation_status, load_dev_identity_status,
 };
 use std::env;
 use std::io;
@@ -20,6 +20,7 @@ const PHASE_IDENTITY_CREATE: &str = "phase2d-identity-create-dev";
 const PHASE_IDENTITY_STATUS: &str = "phase2d-identity-status-dev";
 const PHASE_PUBLIC_BUNDLE_EXPORT: &str = "phase2d-public-bundle-export-dev";
 const PHASE_CONVERSATION_CREATE: &str = "phase2d-conversation-create-dev";
+const PHASE_CONVERSATION_ADD_MEMBER: &str = "phase2d-conversation-add-member-dev";
 
 const WARNINGS: [&str; 4] = [
     "OpenMLS is not wired into CarbonStackComms",
@@ -29,7 +30,6 @@ const WARNINGS: [&str; 4] = [
 ];
 
 const UNSUPPORTED_COMMANDS: &[&str] = &[
-    "conversation-add-member",
     "conversation-join",
     "message-protect",
     "message-open",
@@ -47,6 +47,7 @@ fn main() {
         Some("public-bundle-export") => handle_public_bundle_export(&args[2..]),
         Some("conversation-create") => handle_conversation_create(&args[2..]),
         Some("conversation-load-check") => handle_conversation_load_check(&args[2..]),
+        Some("conversation-add-member") => handle_conversation_add_member(&args[2..]),
         Some("--help") | Some("-h") | None => print_help(),
         Some(other) => {
             print_unsupported_command(other);
@@ -263,7 +264,7 @@ fn print_conversation_create_success(result: &ConversationCreateResult) {
             "conversation group is reloadable through dev-local provider storage",
             "provider storage is dev-only and not production secure vault storage",
             "private material was loaded locally but not printed",
-            "conversation-add-member is not implemented",
+            "conversation-add-member is implemented for dev-local Welcome export",
             "conversation-join is not implemented",
             "message protect/open is not implemented"
         ],
@@ -411,6 +412,325 @@ fn print_conversation_create_invalid_label_common(
     );
 }
 
+fn parse_member_keypackage_path(args: &[String]) -> Option<&str> {
+    let mut index = 0;
+
+    while index < args.len() {
+        if args[index] == "--member-keypackage" {
+            return args.get(index + 1).map(String::as_str);
+        }
+
+        index += 1;
+    }
+
+    None
+}
+
+fn handle_conversation_add_member(args: &[String]) {
+    let Some(device_label) = parse_device_label(args) else {
+        print_conversation_add_member_missing_argument("--device-label");
+        std::process::exit(2);
+    };
+
+    let Some(conversation_label) = parse_conversation_label(args) else {
+        print_conversation_add_member_missing_argument("--conversation-label");
+        std::process::exit(2);
+    };
+
+    let Some(member_keypackage_path) = parse_member_keypackage_path(args) else {
+        print_conversation_add_member_missing_argument("--member-keypackage");
+        std::process::exit(2);
+    };
+
+    if let Err(reason) = validate_device_label(device_label) {
+        print_conversation_add_member_invalid_label(
+            device_label,
+            conversation_label,
+            member_keypackage_path,
+            "invalid_device_label",
+            &reason,
+        );
+        std::process::exit(2);
+    }
+
+    if let Err(reason) = validate_conversation_label(conversation_label) {
+        print_conversation_add_member_invalid_label(
+            device_label,
+            conversation_label,
+            member_keypackage_path,
+            "invalid_conversation_label",
+            &reason,
+        );
+        std::process::exit(2);
+    }
+
+    match add_dev_conversation_member(
+        device_label,
+        conversation_label,
+        std::path::Path::new(member_keypackage_path),
+    ) {
+        Ok(result) => {
+            print_conversation_add_member_success(&result);
+        }
+        Err(err) if err.kind() == io::ErrorKind::NotFound => {
+            print_conversation_add_member_failed(
+                device_label,
+                conversation_label,
+                member_keypackage_path,
+                "conversation_or_artifact_missing",
+                &err,
+                "provider.conversation.missing",
+                "warning",
+                false,
+            );
+            std::process::exit(3);
+        }
+        Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
+            print_conversation_add_member_failed(
+                device_label,
+                conversation_label,
+                member_keypackage_path,
+                "add_member_artifact_exists",
+                &err,
+                "provider.conversation.exists",
+                "warning",
+                false,
+            );
+            std::process::exit(3);
+        }
+        Err(err) if err.kind() == io::ErrorKind::InvalidInput => {
+            print_conversation_add_member_failed(
+                device_label,
+                conversation_label,
+                member_keypackage_path,
+                "invalid_member_keypackage_path",
+                &err,
+                "provider.command.invalid",
+                "warning",
+                false,
+            );
+            std::process::exit(2);
+        }
+        Err(err) if err.kind() == io::ErrorKind::InvalidData => {
+            print_conversation_add_member_failed(
+                device_label,
+                conversation_label,
+                member_keypackage_path,
+                "member_keypackage_invalid",
+                &err,
+                "provider.artifact.invalid",
+                "warning",
+                false,
+            );
+            std::process::exit(3);
+        }
+        Err(err) => {
+            print_conversation_add_member_failed(
+                device_label,
+                conversation_label,
+                member_keypackage_path,
+                "conversation_add_member_failed",
+                &err,
+                "checkpoint.failed",
+                "warning",
+                false,
+            );
+            std::process::exit(3);
+        }
+    }
+}
+
+fn print_conversation_add_member_success(result: &ConversationAddMemberResult) {
+    let envelope = serde_json::json!({
+        "ok": true,
+        "command": "conversation-add-member",
+        "provider": PROVIDER_NAME,
+        "implementation": IMPLEMENTATION,
+        "mode": MODE,
+        "phase": PHASE_CONVERSATION_ADD_MEMBER,
+        "private_material_included": false,
+        "data": {
+            "device_label": result.device_label,
+            "conversation_label": result.conversation_label,
+            "conversation_state_path_hint": result.conversation_state_dir.to_string_lossy(),
+            "conversation_summary_path_hint": result.conversation_summary_path.to_string_lossy(),
+            "provider_storage_path_hint": result.provider_storage_path.to_string_lossy(),
+            "member_keypackage_path_hint": result.member_keypackage_path.to_string_lossy(),
+            "welcome_artifact_path_hint": result.welcome_artifact_path.to_string_lossy(),
+            "welcome_manifest_path_hint": result.welcome_manifest_path.to_string_lossy(),
+            "add_member_summary_path_hint": result.add_member_summary_path.to_string_lossy(),
+            "group_id_ref": result.group_id_ref,
+            "group_id_len": result.group_id_len,
+            "provider_storage_loaded": result.provider_storage_loaded,
+            "provider_storage_written": result.provider_storage_written,
+            "group_reloadable": result.group_reloadable,
+            "member_added": result.member_added,
+            "welcome_artifact_written": result.welcome_artifact_written,
+            "pending_commit_merged": result.pending_commit_merged,
+            "member_count_before": result.member_count_before,
+            "member_count_after": result.member_count_after,
+            "epoch_before": result.epoch_before,
+            "epoch_after": result.epoch_after,
+            "welcome_artifact_sha256": result.welcome_artifact_sha256,
+            "welcome_artifact_size_bytes": result.welcome_artifact_size_bytes,
+            "state_scope": "dev-local-sidecar-state"
+        },
+        "events": [
+            {
+                "event": "provider.conversation.member_added",
+                "severity": "info",
+                "trust_relevant": false
+            },
+            {
+                "event": "provider.welcome.exported",
+                "severity": "info",
+                "trust_relevant": false
+            }
+        ],
+        "warnings": [
+            "dev-only OpenMLS add-member and Welcome export",
+            "Welcome artifact was written but not printed",
+            "provider storage is dev-only and not production secure vault storage",
+            "conversation-join is not implemented",
+            "message protect/open is not implemented"
+        ]
+    });
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&envelope).expect("provider envelope JSON should serialize")
+    );
+}
+
+fn print_conversation_add_member_missing_argument(argument: &str) {
+    let envelope = serde_json::json!({
+        "ok": false,
+        "command": "conversation-add-member",
+        "provider": PROVIDER_NAME,
+        "implementation": IMPLEMENTATION,
+        "mode": MODE,
+        "phase": PHASE_CONVERSATION_ADD_MEMBER,
+        "private_material_included": false,
+        "error": {
+            "code": "missing_required_argument",
+            "message": format!("conversation-add-member requires {argument}")
+        },
+        "events": [
+            {
+                "event": "provider.command.invalid",
+                "severity": "warning",
+                "trust_relevant": false
+            }
+        ],
+        "warnings": [
+            "missing required conversation-add-member argument",
+            "no private material printed"
+        ]
+    });
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&envelope).expect("provider envelope JSON should serialize")
+    );
+}
+
+fn print_conversation_add_member_invalid_label(
+    device_label: &str,
+    conversation_label: &str,
+    member_keypackage_path: &str,
+    code: &str,
+    reason: &str,
+) {
+    let envelope = serde_json::json!({
+        "ok": false,
+        "command": "conversation-add-member",
+        "provider": PROVIDER_NAME,
+        "implementation": IMPLEMENTATION,
+        "mode": MODE,
+        "phase": PHASE_CONVERSATION_ADD_MEMBER,
+        "private_material_included": false,
+        "error": {
+            "code": code,
+            "message": reason
+        },
+        "data": {
+            "device_label": device_label,
+            "conversation_label": conversation_label,
+            "member_keypackage_path_hint": member_keypackage_path,
+            "member_added": false,
+            "welcome_artifact_written": false,
+            "provider_storage_written": false
+        },
+        "events": [
+            {
+                "event": "provider.command.invalid",
+                "severity": "warning",
+                "trust_relevant": false
+            }
+        ],
+        "warnings": [
+            "invalid conversation-add-member label",
+            "no private material printed"
+        ]
+    });
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&envelope).expect("provider envelope JSON should serialize")
+    );
+}
+
+fn print_conversation_add_member_failed(
+    device_label: &str,
+    conversation_label: &str,
+    member_keypackage_path: &str,
+    code: &str,
+    err: &io::Error,
+    provider_event: &str,
+    severity: &str,
+    trust_relevant: bool,
+) {
+    let envelope = serde_json::json!({
+        "ok": false,
+        "command": "conversation-add-member",
+        "provider": PROVIDER_NAME,
+        "implementation": IMPLEMENTATION,
+        "mode": MODE,
+        "phase": PHASE_CONVERSATION_ADD_MEMBER,
+        "private_material_included": false,
+        "error": {
+            "code": code,
+            "message": err.to_string(),
+            "provider_event": provider_event,
+            "severity": severity,
+            "trust_relevant": trust_relevant
+        },
+        "data": {
+            "device_label": device_label,
+            "conversation_label": conversation_label,
+            "member_keypackage_path_hint": member_keypackage_path,
+            "member_added": false,
+            "welcome_artifact_written": false,
+            "provider_storage_written": false
+        },
+        "events": [
+            {
+                "event": provider_event,
+                "severity": severity,
+                "trust_relevant": trust_relevant
+            }
+        ],
+        "warnings": [
+            "conversation-add-member failed",
+            "no private material printed"
+        ]
+    });
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&envelope).expect("provider envelope JSON should serialize")
+    );
+}
 fn handle_conversation_load_check(args: &[String]) {
     let Some(device_label) = parse_device_label(args) else {
         print_conversation_load_check_missing_argument("--device-label");
@@ -491,7 +811,7 @@ fn print_conversation_load_check_success(result: &ConversationLoadCheckResult) {
             "dev-only OpenMLS conversation provider storage loaded",
             "provider storage is not production secure vault storage",
             "private material may be required locally by OpenMLS but is not printed",
-            "conversation-add-member is not implemented",
+            "conversation-add-member is implemented for dev-local Welcome export",
             "conversation-join is not implemented",
             "message protect/open is not implemented"
         ]
@@ -787,10 +1107,11 @@ fn print_provider_info() {
     "identity-status",
     "public-bundle-export",
     "conversation-create",
-    "conversation-load-check"
+    "conversation-load-check",
+    "conversation-add-member"
     ],
     "unsupported": [
-    "conversation-add-member",
+
       "conversation-join",
       "message-protect",
       "message-open",

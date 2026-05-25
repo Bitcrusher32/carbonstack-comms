@@ -48,6 +48,19 @@ type openMLSSidecarProviderData struct {
 	ProviderStorageLoaded        bool     `json:"provider_storage_loaded"`
 	ProviderStoragePathHint      string   `json:"provider_storage_path_hint"`
 	GroupReloadable              bool     `json:"group_reloadable"`
+	MemberAdded                  bool     `json:"member_added"`
+	WelcomeArtifactWritten       bool     `json:"welcome_artifact_written"`
+	PendingCommitMerged          bool     `json:"pending_commit_merged"`
+	MemberCountBefore            int      `json:"member_count_before"`
+	MemberCountAfter             int      `json:"member_count_after"`
+	EpochBefore                  string   `json:"epoch_before"`
+	EpochAfter                   string   `json:"epoch_after"`
+	MemberKeypackagePathHint     string   `json:"member_keypackage_path_hint"`
+	WelcomeArtifactPathHint      string   `json:"welcome_artifact_path_hint"`
+	WelcomeManifestPathHint      string   `json:"welcome_manifest_path_hint"`
+	AddMemberSummaryPathHint     string   `json:"add_member_summary_path_hint"`
+	WelcomeArtifactSHA256        string   `json:"welcome_artifact_sha256"`
+	WelcomeArtifactSizeBytes     int      `json:"welcome_artifact_size_bytes"`
 	ConversationLabel            string   `json:"conversation_label"`
 	ConversationCreated          bool     `json:"conversation_created"`
 	ConversationStatePathHint    string   `json:"conversation_state_path_hint"`
@@ -117,8 +130,8 @@ func TestOpenMLSSidecarProviderInfoCommand(t *testing.T) {
 	assertStringPresent(t, envelope.Data.Capabilities, "public-bundle-export")
 	assertStringPresent(t, envelope.Data.Capabilities, "conversation-create")
 	assertStringPresent(t, envelope.Data.Capabilities, "conversation-load-check")
+	assertStringPresent(t, envelope.Data.Capabilities, "conversation-add-member")
 	unsupported := []string{
-		"conversation-add-member",
 		"conversation-join",
 		"message-protect",
 		"message-open",
@@ -148,7 +161,7 @@ func TestOpenMLSSidecarProviderInfoCommand(t *testing.T) {
 }
 
 func TestOpenMLSSidecarUnsupportedCommandEnvelope(t *testing.T) {
-	output, err := runOpenMLSSidecar("conversation-add-member")
+	output, err := runOpenMLSSidecar("conversation-join")
 	assertExitCode(t, err, 2)
 
 	envelope := parseSidecarEnvelope(t, output)
@@ -157,8 +170,8 @@ func TestOpenMLSSidecarUnsupportedCommandEnvelope(t *testing.T) {
 		t.Fatal("unsupported command envelope ok = true, want false")
 	}
 
-	if envelope.Command != "conversation-add-member" {
-		t.Fatalf("command = %q, want conversation-add-member", envelope.Command)
+	if envelope.Command != "conversation-join" {
+		t.Fatalf("command = %q, want conversation-join", envelope.Command)
 	}
 
 	assertProviderEnvelopeBase(t, envelope)
@@ -308,6 +321,19 @@ func TestOpenMLSSidecarIdentityCreateWritesDevIdentityState(t *testing.T) {
 		ProviderStorageLoaded       bool   `json:"provider_storage_loaded"`
 		ProviderStoragePathHint     string `json:"provider_storage_path_hint"`
 		GroupReloadable             bool   `json:"group_reloadable"`
+		MemberAdded                 bool   `json:"member_added"`
+		WelcomeArtifactWritten      bool   `json:"welcome_artifact_written"`
+		PendingCommitMerged         bool   `json:"pending_commit_merged"`
+		MemberCountBefore           int    `json:"member_count_before"`
+		MemberCountAfter            int    `json:"member_count_after"`
+		EpochBefore                 string `json:"epoch_before"`
+		EpochAfter                  string `json:"epoch_after"`
+		MemberKeypackagePathHint    string `json:"member_keypackage_path_hint"`
+		WelcomeArtifactPathHint     string `json:"welcome_artifact_path_hint"`
+		WelcomeManifestPathHint     string `json:"welcome_manifest_path_hint"`
+		AddMemberSummaryPathHint    string `json:"add_member_summary_path_hint"`
+		WelcomeArtifactSHA256       string `json:"welcome_artifact_sha256"`
+		WelcomeArtifactSizeBytes    int    `json:"welcome_artifact_size_bytes"`
 		ConversationLabel           string `json:"conversation_label"`
 		ConversationCreated         bool   `json:"conversation_created"`
 		ConversationStatePathHint   string `json:"conversation_state_path_hint"`
@@ -371,6 +397,19 @@ func TestOpenMLSSidecarIdentityCreateWritesDevIdentityState(t *testing.T) {
 		ProviderStorageLoaded       bool   `json:"provider_storage_loaded"`
 		ProviderStoragePathHint     string `json:"provider_storage_path_hint"`
 		GroupReloadable             bool   `json:"group_reloadable"`
+		MemberAdded                 bool   `json:"member_added"`
+		WelcomeArtifactWritten      bool   `json:"welcome_artifact_written"`
+		PendingCommitMerged         bool   `json:"pending_commit_merged"`
+		MemberCountBefore           int    `json:"member_count_before"`
+		MemberCountAfter            int    `json:"member_count_after"`
+		EpochBefore                 string `json:"epoch_before"`
+		EpochAfter                  string `json:"epoch_after"`
+		MemberKeypackagePathHint    string `json:"member_keypackage_path_hint"`
+		WelcomeArtifactPathHint     string `json:"welcome_artifact_path_hint"`
+		WelcomeManifestPathHint     string `json:"welcome_manifest_path_hint"`
+		AddMemberSummaryPathHint    string `json:"add_member_summary_path_hint"`
+		WelcomeArtifactSHA256       string `json:"welcome_artifact_sha256"`
+		WelcomeArtifactSizeBytes    int    `json:"welcome_artifact_size_bytes"`
 		ConversationLabel           string `json:"conversation_label"`
 		ConversationCreated         bool   `json:"conversation_created"`
 		ConversationStatePathHint   string `json:"conversation_state_path_hint"`
@@ -712,6 +751,19 @@ func TestOpenMLSSidecarPublicBundleExportCreatesSummary(t *testing.T) {
 		ProviderStorageLoaded        bool   `json:"provider_storage_loaded"`
 		ProviderStoragePathHint      string `json:"provider_storage_path_hint"`
 		GroupReloadable              bool   `json:"group_reloadable"`
+		MemberAdded                  bool   `json:"member_added"`
+		WelcomeArtifactWritten       bool   `json:"welcome_artifact_written"`
+		PendingCommitMerged          bool   `json:"pending_commit_merged"`
+		MemberCountBefore            int    `json:"member_count_before"`
+		MemberCountAfter             int    `json:"member_count_after"`
+		EpochBefore                  string `json:"epoch_before"`
+		EpochAfter                   string `json:"epoch_after"`
+		MemberKeypackagePathHint     string `json:"member_keypackage_path_hint"`
+		WelcomeArtifactPathHint      string `json:"welcome_artifact_path_hint"`
+		WelcomeManifestPathHint      string `json:"welcome_manifest_path_hint"`
+		AddMemberSummaryPathHint     string `json:"add_member_summary_path_hint"`
+		WelcomeArtifactSHA256        string `json:"welcome_artifact_sha256"`
+		WelcomeArtifactSizeBytes     int    `json:"welcome_artifact_size_bytes"`
 		ConversationLabel            string `json:"conversation_label"`
 		ConversationCreated          bool   `json:"conversation_created"`
 		ConversationStatePathHint    string `json:"conversation_state_path_hint"`
@@ -906,6 +958,19 @@ func TestOpenMLSSidecarPublicBundleExportWritesArtifact(t *testing.T) {
 		ProviderStorageLoaded       bool   `json:"provider_storage_loaded"`
 		ProviderStoragePathHint     string `json:"provider_storage_path_hint"`
 		GroupReloadable             bool   `json:"group_reloadable"`
+		MemberAdded                 bool   `json:"member_added"`
+		WelcomeArtifactWritten      bool   `json:"welcome_artifact_written"`
+		PendingCommitMerged         bool   `json:"pending_commit_merged"`
+		MemberCountBefore           int    `json:"member_count_before"`
+		MemberCountAfter            int    `json:"member_count_after"`
+		EpochBefore                 string `json:"epoch_before"`
+		EpochAfter                  string `json:"epoch_after"`
+		MemberKeypackagePathHint    string `json:"member_keypackage_path_hint"`
+		WelcomeArtifactPathHint     string `json:"welcome_artifact_path_hint"`
+		WelcomeManifestPathHint     string `json:"welcome_manifest_path_hint"`
+		AddMemberSummaryPathHint    string `json:"add_member_summary_path_hint"`
+		WelcomeArtifactSHA256       string `json:"welcome_artifact_sha256"`
+		WelcomeArtifactSizeBytes    int    `json:"welcome_artifact_size_bytes"`
 		ConversationLabel           string `json:"conversation_label"`
 		ConversationCreated         bool   `json:"conversation_created"`
 		ConversationStatePathHint   string `json:"conversation_state_path_hint"`
@@ -987,6 +1052,19 @@ func TestOpenMLSSidecarPublicBundleExportWritesArtifact(t *testing.T) {
 		ProviderStorageLoaded       bool   `json:"provider_storage_loaded"`
 		ProviderStoragePathHint     string `json:"provider_storage_path_hint"`
 		GroupReloadable             bool   `json:"group_reloadable"`
+		MemberAdded                 bool   `json:"member_added"`
+		WelcomeArtifactWritten      bool   `json:"welcome_artifact_written"`
+		PendingCommitMerged         bool   `json:"pending_commit_merged"`
+		MemberCountBefore           int    `json:"member_count_before"`
+		MemberCountAfter            int    `json:"member_count_after"`
+		EpochBefore                 string `json:"epoch_before"`
+		EpochAfter                  string `json:"epoch_after"`
+		MemberKeypackagePathHint    string `json:"member_keypackage_path_hint"`
+		WelcomeArtifactPathHint     string `json:"welcome_artifact_path_hint"`
+		WelcomeManifestPathHint     string `json:"welcome_manifest_path_hint"`
+		AddMemberSummaryPathHint    string `json:"add_member_summary_path_hint"`
+		WelcomeArtifactSHA256       string `json:"welcome_artifact_sha256"`
+		WelcomeArtifactSizeBytes    int    `json:"welcome_artifact_size_bytes"`
 		ConversationLabel           string `json:"conversation_label"`
 		ConversationCreated         bool   `json:"conversation_created"`
 		ConversationStatePathHint   string `json:"conversation_state_path_hint"`
@@ -1374,6 +1452,187 @@ func TestOpenMLSSidecarConversationLoadCheck(t *testing.T) {
 	}
 
 	assertNoSecretMaterialInStdout(t, loadOutput)
+}
+
+func TestOpenMLSSidecarConversationAddMemberWelcomeExport(t *testing.T) {
+	removeOpenMLSSidecarState(t)
+
+	aliceIdentityOutput, aliceIdentityErr := runOpenMLSSidecar("identity-create", "--device-label", "carbonstack-alice-device")
+	if aliceIdentityErr != nil {
+		t.Fatalf("alice identity-create failed: %v\n%s", aliceIdentityErr, string(aliceIdentityOutput))
+	}
+
+	bobIdentityOutput, bobIdentityErr := runOpenMLSSidecar("identity-create", "--device-label", "carbonstack-bob-device")
+	if bobIdentityErr != nil {
+		t.Fatalf("bob identity-create failed: %v\n%s", bobIdentityErr, string(bobIdentityOutput))
+	}
+
+	bobBundleOutput, bobBundleErr := runOpenMLSSidecar("public-bundle-export", "--device-label", "carbonstack-bob-device", "--write-artifact")
+	if bobBundleErr != nil {
+		t.Fatalf("bob public-bundle-export failed: %v\n%s", bobBundleErr, string(bobBundleOutput))
+	}
+
+	bobBundleEnvelope := parseSidecarEnvelope(t, bobBundleOutput)
+	if !bobBundleEnvelope.OK {
+		t.Fatal("bob public-bundle-export ok = false, want true")
+	}
+
+	if bobBundleEnvelope.Data.KeyPackageArtifactPathHint == "" {
+		t.Fatal("bob public-bundle-export should return key package artifact path hint")
+	}
+
+	aliceConversationOutput, aliceConversationErr := runOpenMLSSidecar("conversation-create", "--device-label", "carbonstack-alice-device", "--conversation-label", "carbonstack-test-conversation")
+	if aliceConversationErr != nil {
+		t.Fatalf("alice conversation-create failed: %v\n%s", aliceConversationErr, string(aliceConversationOutput))
+	}
+
+	beforeLoadOutput, beforeLoadErr := runOpenMLSSidecar("conversation-load-check", "--device-label", "carbonstack-alice-device", "--conversation-label", "carbonstack-test-conversation")
+	if beforeLoadErr != nil {
+		t.Fatalf("before add-member conversation-load-check failed: %v\n%s", beforeLoadErr, string(beforeLoadOutput))
+	}
+
+	beforeLoadEnvelope := parseSidecarEnvelope(t, beforeLoadOutput)
+	if beforeLoadEnvelope.Data.MemberCount != 1 {
+		t.Fatalf("before add-member member count = %d, want 1", beforeLoadEnvelope.Data.MemberCount)
+	}
+
+	addMemberOutput, addMemberErr := runOpenMLSSidecar(
+		"conversation-add-member",
+		"--device-label", "carbonstack-alice-device",
+		"--conversation-label", "carbonstack-test-conversation",
+		"--member-keypackage", bobBundleEnvelope.Data.KeyPackageArtifactPathHint,
+	)
+	if addMemberErr != nil {
+		t.Fatalf("conversation-add-member failed: %v\n%s", addMemberErr, string(addMemberOutput))
+	}
+
+	addMemberEnvelope := parseSidecarEnvelope(t, addMemberOutput)
+
+	if !addMemberEnvelope.OK {
+		t.Fatal("conversation-add-member envelope ok = false, want true")
+	}
+
+	if addMemberEnvelope.Command != "conversation-add-member" {
+		t.Fatalf("command = %q, want conversation-add-member", addMemberEnvelope.Command)
+	}
+
+	assertProviderEnvelopeBase(t, addMemberEnvelope)
+
+	if addMemberEnvelope.Phase != "phase2d-conversation-add-member-dev" {
+		t.Fatalf("phase = %q, want phase2d-conversation-add-member-dev", addMemberEnvelope.Phase)
+	}
+
+	if addMemberEnvelope.PrivateMaterialIncluded {
+		t.Fatal("conversation-add-member must not include private material")
+	}
+
+	if !addMemberEnvelope.Data.MemberAdded {
+		t.Fatal("conversation-add-member should report member_added=true")
+	}
+
+	if !addMemberEnvelope.Data.WelcomeArtifactWritten {
+		t.Fatal("conversation-add-member should report welcome_artifact_written=true")
+	}
+
+	if !addMemberEnvelope.Data.ProviderStorageLoaded {
+		t.Fatal("conversation-add-member should report provider_storage_loaded=true")
+	}
+
+	if !addMemberEnvelope.Data.ProviderStorageWritten {
+		t.Fatal("conversation-add-member should report provider_storage_written=true")
+	}
+
+	if !addMemberEnvelope.Data.GroupReloadable {
+		t.Fatal("conversation-add-member should report group_reloadable=true")
+	}
+
+	if !addMemberEnvelope.Data.PendingCommitMerged {
+		t.Fatal("conversation-add-member should report pending_commit_merged=true")
+	}
+
+	if addMemberEnvelope.Data.MemberCountBefore != 1 {
+		t.Fatalf("member_count_before = %d, want 1", addMemberEnvelope.Data.MemberCountBefore)
+	}
+
+	if addMemberEnvelope.Data.MemberCountAfter != 2 {
+		t.Fatalf("member_count_after = %d, want 2", addMemberEnvelope.Data.MemberCountAfter)
+	}
+
+	if addMemberEnvelope.Data.EpochBefore == "" {
+		t.Fatal("conversation-add-member should report epoch_before")
+	}
+
+	if addMemberEnvelope.Data.EpochAfter == "" {
+		t.Fatal("conversation-add-member should report epoch_after")
+	}
+
+	if addMemberEnvelope.Data.WelcomeArtifactPathHint == "" {
+		t.Fatal("conversation-add-member should return welcome artifact path hint")
+	}
+
+	if addMemberEnvelope.Data.WelcomeManifestPathHint == "" {
+		t.Fatal("conversation-add-member should return welcome manifest path hint")
+	}
+
+	if addMemberEnvelope.Data.AddMemberSummaryPathHint == "" {
+		t.Fatal("conversation-add-member should return add-member summary path hint")
+	}
+
+	if addMemberEnvelope.Data.WelcomeArtifactSHA256 == "" {
+		t.Fatal("conversation-add-member should return welcome artifact sha256")
+	}
+
+	if addMemberEnvelope.Data.WelcomeArtifactSizeBytes <= 0 {
+		t.Fatalf("welcome artifact size = %d, want > 0", addMemberEnvelope.Data.WelcomeArtifactSizeBytes)
+	}
+
+	if len(addMemberEnvelope.Events) != 2 {
+		t.Fatalf("conversation-add-member event count = %d, want 2", len(addMemberEnvelope.Events))
+	}
+
+	assertNoSecretMaterialInStdout(t, addMemberOutput)
+
+	assertFileExists(t, filepath.Join(openMLSSidecarDir, addMemberEnvelope.Data.WelcomeArtifactPathHint))
+	assertFileExists(t, filepath.Join(openMLSSidecarDir, addMemberEnvelope.Data.WelcomeManifestPathHint))
+	assertFileExists(t, filepath.Join(openMLSSidecarDir, addMemberEnvelope.Data.AddMemberSummaryPathHint))
+
+	afterLoadOutput, afterLoadErr := runOpenMLSSidecar("conversation-load-check", "--device-label", "carbonstack-alice-device", "--conversation-label", "carbonstack-test-conversation")
+	if afterLoadErr != nil {
+		t.Fatalf("after add-member conversation-load-check failed: %v\n%s", afterLoadErr, string(afterLoadOutput))
+	}
+
+	afterLoadEnvelope := parseSidecarEnvelope(t, afterLoadOutput)
+
+	if afterLoadEnvelope.Data.MemberCount != 2 {
+		t.Fatalf("after add-member member count = %d, want 2", afterLoadEnvelope.Data.MemberCount)
+	}
+
+	if !afterLoadEnvelope.Data.GroupReloadable {
+		t.Fatal("after add-member conversation-load-check should report group_reloadable=true")
+	}
+
+	duplicateOutput, duplicateErr := runOpenMLSSidecar(
+		"conversation-add-member",
+		"--device-label", "carbonstack-alice-device",
+		"--conversation-label", "carbonstack-test-conversation",
+		"--member-keypackage", bobBundleEnvelope.Data.KeyPackageArtifactPathHint,
+	)
+	assertExitCode(t, duplicateErr, 3)
+
+	duplicateEnvelope := parseSidecarEnvelope(t, duplicateOutput)
+	if duplicateEnvelope.OK {
+		t.Fatal("duplicate conversation-add-member envelope ok = true, want false")
+	}
+
+	if duplicateEnvelope.Error == nil {
+		t.Fatal("duplicate conversation-add-member should include error")
+	}
+
+	if duplicateEnvelope.Error.Code != "add_member_artifact_exists" {
+		t.Fatalf("duplicate error code = %q, want add_member_artifact_exists", duplicateEnvelope.Error.Code)
+	}
+
+	assertNoSecretMaterialInStdout(t, duplicateOutput)
 }
 func runOpenMLSSidecar(args ...string) ([]byte, error) {
 	sidecarDir := filepath.Clean(openMLSSidecarDir)
