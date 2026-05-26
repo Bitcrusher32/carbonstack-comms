@@ -2402,6 +2402,61 @@ func assertMessageOpenSuccess(t *testing.T, envelope openMLSSidecarEnvelope, mes
 	}
 }
 
+func TestOpenMLSSidecarMessageProtectOpenBidirectional(t *testing.T) {
+	removeOpenMLSSidecarState(t)
+
+	addMemberEnvelope := setupOpenMLSTwoMemberConversation(t)
+
+	aliceToBobProtectEnvelope := protectOpenMLSSidecarMessage(t, "alice-message-0001", "hello bob from alice")
+
+	aliceToBobOpenEnvelope, aliceToBobOpenOutput := openOpenMLSSidecarMessage(t, "alice-message-0001", aliceToBobProtectEnvelope.Data.MessageArtifactPathHint)
+	assertMessageOpenSuccess(t, aliceToBobOpenEnvelope, "alice-message-0001", "hello bob from alice", addMemberEnvelope.Data.GroupIDRef)
+	assertNoSecretMaterialInStdout(t, aliceToBobOpenOutput)
+
+	bobProtectOutput, bobProtectErr := runOpenMLSSidecar(
+		"message-protect",
+		"--device-label", "carbonstack-bob-device",
+		"--conversation-label", "carbonstack-test-conversation",
+		"--message-label", "bob-message-0001",
+		"--plaintext", "hello alice from bob",
+	)
+	if bobProtectErr != nil {
+		t.Fatalf("bob message-protect failed: %v\n%s", bobProtectErr, string(bobProtectOutput))
+	}
+
+	bobProtectEnvelope := parseSidecarEnvelope(t, bobProtectOutput)
+	assertMessageProtectSuccess(t, bobProtectEnvelope, "bob-message-0001", "phase2d-message-protect-dev", addMemberEnvelope.Data.GroupIDRef)
+
+	if bobProtectEnvelope.Data.DeviceLabel != "carbonstack-bob-device" {
+		t.Fatalf("bob protect device_label = %q, want carbonstack-bob-device", bobProtectEnvelope.Data.DeviceLabel)
+	}
+
+	if !strings.Contains(bobProtectEnvelope.Data.MessageArtifactPathHint, "carbonstack-bob-device") {
+		t.Fatalf("bob protect artifact path = %q, want Bob device-scoped path", bobProtectEnvelope.Data.MessageArtifactPathHint)
+	}
+
+	assertNoSecretMaterialInStdout(t, bobProtectOutput)
+
+	aliceOpenOutput, aliceOpenErr := runOpenMLSSidecar(
+		"message-open",
+		"--device-label", "carbonstack-alice-device",
+		"--conversation-label", "carbonstack-test-conversation",
+		"--message-label", "bob-message-0001",
+		"--message", bobProtectEnvelope.Data.MessageArtifactPathHint,
+	)
+	if aliceOpenErr != nil {
+		t.Fatalf("alice message-open failed: %v\n%s", aliceOpenErr, string(aliceOpenOutput))
+	}
+
+	aliceOpenEnvelope := parseSidecarEnvelope(t, aliceOpenOutput)
+	assertMessageOpenSuccess(t, aliceOpenEnvelope, "bob-message-0001", "hello alice from bob", addMemberEnvelope.Data.GroupIDRef)
+
+	if aliceOpenEnvelope.Data.DeviceLabel != "carbonstack-alice-device" {
+		t.Fatalf("alice open device_label = %q, want carbonstack-alice-device", aliceOpenEnvelope.Data.DeviceLabel)
+	}
+
+	assertNoSecretMaterialInStdout(t, aliceOpenOutput)
+}
 func TestOpenMLSSidecarMessageOpenWrongDeviceRejected(t *testing.T) {
 	removeOpenMLSSidecarState(t)
 
