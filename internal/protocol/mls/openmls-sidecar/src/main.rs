@@ -1,3 +1,4 @@
+mod cli;
 mod envelope;
 mod labels;
 mod paths;
@@ -5,11 +6,15 @@ mod provider;
 mod schema;
 mod state;
 
+use cli::{
+    parse_conversation_label, parse_device_label, parse_member_keypackage_path,
+    parse_message_artifact_path, parse_message_label, parse_plaintext, parse_welcome_artifact_path,
+    parse_write_artifact_flag,
+};
 use envelope::{
-    CAPABILITIES, PHASE_CONVERSATION_ADD_MEMBER, PHASE_CONVERSATION_CREATE,
-    PHASE_CONVERSATION_JOIN, PHASE_IDENTITY_CREATE, PHASE_IDENTITY_STATUS, PHASE_MESSAGE_OPEN,
-    PHASE_MESSAGE_PROTECT, PHASE_PROVIDER_INFO, PHASE_PUBLIC_BUNDLE_EXPORT, UNSUPPORTED_COMMANDS,
-    json_escape, print_identity_create_already_exists, print_identity_create_invalid_label,
+    PHASE_CONVERSATION_ADD_MEMBER, PHASE_CONVERSATION_CREATE, PHASE_CONVERSATION_JOIN,
+    PHASE_MESSAGE_OPEN, PHASE_MESSAGE_PROTECT, UNSUPPORTED_COMMANDS, json_escape,
+    print_identity_create_already_exists, print_identity_create_invalid_label,
     print_identity_create_missing_label, print_identity_create_state_write_failed,
     print_identity_create_success, print_identity_status_invalid_label,
     print_identity_status_missing, print_identity_status_missing_label,
@@ -22,9 +27,8 @@ use envelope::{
 use labels::{validate_conversation_label, validate_device_label};
 use state::{
     ConversationAddMemberResult, ConversationCreateResult, ConversationJoinResult,
-    ConversationLoadCheckResult, IdentityCreateResult, IdentityStatusResult, MessageOpenResult,
-    MessageProtectResult, PublicBundleExportResult, add_dev_conversation_member,
-    create_dev_conversation, create_dev_identity, device_state_dir,
+    ConversationLoadCheckResult, MessageOpenResult, MessageProtectResult,
+    add_dev_conversation_member, create_dev_conversation, create_dev_identity,
     export_dev_public_bundle_summary, join_dev_conversation, load_dev_conversation_status,
     load_dev_identity_status, open_dev_message, protect_dev_message, validate_message_label,
 };
@@ -140,7 +144,7 @@ fn handle_public_bundle_export(args: &[String]) {
         std::process::exit(2);
     }
 
-    let write_artifact = args.iter().any(|arg| arg == "--write-artifact");
+    let write_artifact = parse_write_artifact_flag(args);
 
     match export_dev_public_bundle_summary(device_label, write_artifact) {
         Ok(result) => {
@@ -159,20 +163,6 @@ fn handle_public_bundle_export(args: &[String]) {
             std::process::exit(4);
         }
     }
-}
-
-fn parse_conversation_label(args: &[String]) -> Option<&str> {
-    let mut index = 0;
-
-    while index < args.len() {
-        if args[index] == "--conversation-label" {
-            return args.get(index + 1).map(String::as_str);
-        }
-
-        index += 1;
-    }
-
-    None
 }
 
 fn handle_conversation_create(args: &[String]) {
@@ -411,20 +401,6 @@ fn print_conversation_create_invalid_label_common(
         serde_json::to_string_pretty(&envelope)
             .expect("failed to serialize conversation-create invalid label envelope")
     );
-}
-
-fn parse_member_keypackage_path(args: &[String]) -> Option<&str> {
-    let mut index = 0;
-
-    while index < args.len() {
-        if args[index] == "--member-keypackage" {
-            return args.get(index + 1).map(String::as_str);
-        }
-
-        index += 1;
-    }
-
-    None
 }
 
 fn handle_conversation_add_member(args: &[String]) {
@@ -733,61 +709,6 @@ fn print_conversation_add_member_failed(
     );
 }
 
-fn parse_welcome_artifact_path(args: &[String]) -> Option<&str> {
-    let mut index = 0;
-
-    while index < args.len() {
-        if args[index] == "--welcome" {
-            return args.get(index + 1).map(String::as_str);
-        }
-
-        index += 1;
-    }
-
-    None
-}
-
-fn parse_plaintext(args: &[String]) -> Option<&str> {
-    let mut index = 0;
-
-    while index < args.len() {
-        if args[index] == "--plaintext" {
-            return args.get(index + 1).map(String::as_str);
-        }
-
-        index += 1;
-    }
-
-    None
-}
-
-fn parse_message_artifact_path(args: &[String]) -> Option<&str> {
-    let mut index = 0;
-
-    while index < args.len() {
-        if args[index] == "--message" {
-            return args.get(index + 1).map(String::as_str);
-        }
-
-        index += 1;
-    }
-
-    None
-}
-
-fn parse_message_label(args: &[String]) -> Option<&str> {
-    let mut index = 0;
-
-    while index < args.len() {
-        if args[index] == "--message-label" {
-            return args.get(index + 1).map(String::as_str);
-        }
-
-        index += 1;
-    }
-
-    None
-}
 fn handle_message_protect(args: &[String]) {
     let Some(device_label) = parse_device_label(args) else {
         print_message_protect_missing_argument("--device-label");
@@ -1910,23 +1831,14 @@ fn print_conversation_create_failure_common(
             .expect("failed to serialize conversation-create failure envelope")
     );
 }
-fn parse_device_label(args: &[String]) -> Option<&str> {
-    let mut index = 0;
-
-    while index < args.len() {
-        if args[index] == "--device-label" {
-            return args.get(index + 1).map(String::as_str);
-        }
-
-        index += 1;
-    }
-
-    None
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::envelope::{
+        CAPABILITIES, PHASE_IDENTITY_CREATE, PHASE_IDENTITY_STATUS, PHASE_PROVIDER_INFO,
+        PHASE_PUBLIC_BUNDLE_EXPORT,
+    };
 
     #[test]
     fn provider_info_constants_are_phase2d_bootstrap() {
@@ -1952,21 +1864,5 @@ mod tests {
         assert!(UNSUPPORTED_COMMANDS.contains(&"state-checkpoint"));
         assert!(CAPABILITIES.contains(&"message-protect"));
         assert!(CAPABILITIES.contains(&"message-open"));
-    }
-
-    #[test]
-    fn parses_device_label_argument() {
-        let args = vec![
-            "--device-label".to_string(),
-            "carbonstack-alice-device".to_string(),
-        ];
-
-        assert_eq!(parse_device_label(&args), Some("carbonstack-alice-device"));
-    }
-
-    #[test]
-    fn missing_device_label_argument_returns_none() {
-        let args = vec!["--other".to_string(), "value".to_string()];
-        assert_eq!(parse_device_label(&args), None);
     }
 }
