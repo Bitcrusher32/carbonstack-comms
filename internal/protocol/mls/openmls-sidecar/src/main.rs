@@ -1,4 +1,5 @@
 mod labels;
+mod paths;
 mod provider;
 mod state;
 

@@ -1,3 +1,15 @@
+pub use crate::paths::device_state_dir;
+use crate::paths::{
+    device_conversation_add_member_summary_path, device_conversation_join_summary_path,
+    device_conversation_message_artifact_path, device_conversation_message_dir,
+    device_conversation_message_manifest_path, device_conversation_message_open_summary_path,
+    device_conversation_message_protect_summary_path, device_conversation_provider_storage_path,
+    device_conversation_state_dir, device_conversation_summary_path,
+    device_conversation_welcome_artifact_path, device_conversation_welcome_manifest_path,
+    device_provider_storage_path, identity_prep_manifest_path, identity_state_path,
+    identity_summary_path, public_bundle_keypackage_artifact_path, public_bundle_manifest_path,
+    public_bundle_summary_path, signer_path,
+};
 use crate::provider::CarbonStackSidecarProvider;
 use openmls::key_packages::KeyPackageIn;
 use openmls::prelude::*;
@@ -10,8 +22,6 @@ use std::io;
 use std::path::{Path, PathBuf};
 use tls_codec::{Deserialize as TlsDeserializeTrait, Serialize as TlsSerializeTrait};
 
-pub const STATE_ROOT: &str = ".carbonstack-openmls-sidecar-state";
-pub const DEV_SCOPE: &str = "dev";
 pub const CIPHERSUITE_LABEL: &str = "MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519";
 
 #[derive(Debug, Clone)]
@@ -83,43 +93,6 @@ struct IdentityStateRead {
     provider_storage_written: bool,
     public_bundle_available: bool,
 }
-pub fn device_state_dir(device_label: &str) -> PathBuf {
-    Path::new(STATE_ROOT)
-        .join(DEV_SCOPE)
-        .join("devices")
-        .join(device_label)
-}
-
-pub fn identity_prep_manifest_path(device_label: &str) -> PathBuf {
-    device_state_dir(device_label).join("identity-prep.json")
-}
-
-pub fn identity_summary_path(device_label: &str) -> PathBuf {
-    device_state_dir(device_label).join("identity-summary.json")
-}
-
-pub fn identity_state_path(device_label: &str) -> PathBuf {
-    device_state_dir(device_label).join("identity-state.json")
-}
-
-pub fn signer_path(device_label: &str) -> PathBuf {
-    device_state_dir(device_label).join("signer.json")
-}
-pub fn conversation_state_dir(conversation_label: &str) -> PathBuf {
-    Path::new(STATE_ROOT)
-        .join(DEV_SCOPE)
-        .join("conversations")
-        .join(conversation_label)
-}
-
-pub fn conversation_summary_path(conversation_label: &str) -> PathBuf {
-    conversation_state_dir(conversation_label).join("conversation-summary.json")
-}
-
-pub fn conversation_provider_storage_path(conversation_label: &str) -> PathBuf {
-    conversation_state_dir(conversation_label).join("provider-storage.json")
-}
-
 pub fn create_dev_identity(device_label: &str) -> io::Result<IdentityCreateResult> {
     let state_dir = device_state_dir(device_label);
     let prep_manifest_path = identity_prep_manifest_path(device_label);
@@ -379,22 +352,6 @@ struct PublicBundleManifest<'a> {
     warning: &'a str,
 }
 
-pub fn public_bundle_summary_path(device_label: &str) -> PathBuf {
-    device_state_dir(device_label).join("public-bundle-summary.json")
-}
-
-pub fn public_bundle_keypackage_artifact_path(device_label: &str) -> PathBuf {
-    device_state_dir(device_label).join("public-bundle.keypackage.bin")
-}
-
-pub fn public_bundle_manifest_path(device_label: &str) -> PathBuf {
-    device_state_dir(device_label).join("public-bundle-manifest.json")
-}
-
-pub fn device_provider_storage_path(device_label: &str) -> PathBuf {
-    device_state_dir(device_label).join("provider-storage.json")
-}
-
 pub fn export_dev_public_bundle_summary(
     device_label: &str,
     write_artifact: bool,
@@ -592,6 +549,7 @@ fn write_json_file<T: Serialize>(path: &Path, value: &T) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::paths::{DEV_SCOPE, STATE_ROOT};
 
     #[test]
     fn device_state_dir_uses_dev_scope() {
@@ -852,18 +810,6 @@ pub fn load_dev_conversation_status(
         provider_storage_loaded: true,
         group_reloadable: true,
     })
-}
-
-pub fn conversation_welcome_artifact_path(conversation_label: &str) -> PathBuf {
-    conversation_state_dir(conversation_label).join("welcome.bin")
-}
-
-pub fn conversation_welcome_manifest_path(conversation_label: &str) -> PathBuf {
-    conversation_state_dir(conversation_label).join("welcome-manifest.json")
-}
-
-pub fn conversation_add_member_summary_path(conversation_label: &str) -> PathBuf {
-    conversation_state_dir(conversation_label).join("add-member-summary.json")
 }
 
 #[derive(Debug, Clone)]
@@ -1207,92 +1153,6 @@ pub fn add_dev_conversation_member(
     })
 }
 
-pub fn device_conversations_dir(device_label: &str) -> PathBuf {
-    device_state_dir(device_label).join("conversations")
-}
-
-pub fn device_conversation_state_dir(device_label: &str, conversation_label: &str) -> PathBuf {
-    device_conversations_dir(device_label).join(conversation_label)
-}
-
-pub fn device_conversation_summary_path(device_label: &str, conversation_label: &str) -> PathBuf {
-    device_conversation_state_dir(device_label, conversation_label)
-        .join("conversation-summary.json")
-}
-
-pub fn device_conversation_provider_storage_path(
-    device_label: &str,
-    conversation_label: &str,
-) -> PathBuf {
-    device_conversation_state_dir(device_label, conversation_label).join("provider-storage.json")
-}
-
-pub fn device_conversation_join_summary_path(
-    device_label: &str,
-    conversation_label: &str,
-) -> PathBuf {
-    device_conversation_state_dir(device_label, conversation_label).join("join-summary.json")
-}
-pub fn device_conversation_welcome_artifact_path(
-    device_label: &str,
-    conversation_label: &str,
-) -> PathBuf {
-    device_conversation_state_dir(device_label, conversation_label).join("welcome.bin")
-}
-
-pub fn device_conversation_welcome_manifest_path(
-    device_label: &str,
-    conversation_label: &str,
-) -> PathBuf {
-    device_conversation_state_dir(device_label, conversation_label).join("welcome-manifest.json")
-}
-
-pub fn device_conversation_add_member_summary_path(
-    device_label: &str,
-    conversation_label: &str,
-) -> PathBuf {
-    device_conversation_state_dir(device_label, conversation_label).join("add-member-summary.json")
-}
-
-pub fn device_conversation_messages_dir(device_label: &str, conversation_label: &str) -> PathBuf {
-    device_conversation_state_dir(device_label, conversation_label).join("messages")
-}
-
-pub fn device_conversation_message_dir(
-    device_label: &str,
-    conversation_label: &str,
-    message_label: &str,
-) -> PathBuf {
-    device_conversation_messages_dir(device_label, conversation_label).join(message_label)
-}
-
-pub fn device_conversation_message_artifact_path(
-    device_label: &str,
-    conversation_label: &str,
-    message_label: &str,
-) -> PathBuf {
-    device_conversation_message_dir(device_label, conversation_label, message_label)
-        .join("application-message.bin")
-}
-
-pub fn device_conversation_message_manifest_path(
-    device_label: &str,
-    conversation_label: &str,
-    message_label: &str,
-) -> PathBuf {
-    device_conversation_message_dir(device_label, conversation_label, message_label)
-        .join("message-manifest.json")
-}
-
-pub fn device_conversation_message_protect_summary_path(
-    device_label: &str,
-    conversation_label: &str,
-    message_label: &str,
-) -> PathBuf {
-    device_conversation_message_dir(device_label, conversation_label, message_label)
-        .join("message-protect-summary.json")
-}
-
 #[derive(Debug, Clone)]
 pub struct ConversationJoinResult {
     pub device_label: String,
@@ -1577,46 +1437,6 @@ pub fn join_dev_conversation(
         member_count,
         epoch,
     })
-}
-
-pub fn conversation_messages_dir(conversation_label: &str) -> PathBuf {
-    conversation_state_dir(conversation_label).join("messages")
-}
-
-pub fn conversation_message_dir(conversation_label: &str, message_label: &str) -> PathBuf {
-    conversation_messages_dir(conversation_label).join(message_label)
-}
-
-pub fn conversation_message_artifact_path(
-    conversation_label: &str,
-    message_label: &str,
-) -> PathBuf {
-    conversation_message_dir(conversation_label, message_label).join("application-message.bin")
-}
-
-pub fn conversation_message_manifest_path(
-    conversation_label: &str,
-    message_label: &str,
-) -> PathBuf {
-    conversation_message_dir(conversation_label, message_label).join("message-manifest.json")
-}
-
-pub fn conversation_message_protect_summary_path(
-    conversation_label: &str,
-    message_label: &str,
-) -> PathBuf {
-    conversation_message_dir(conversation_label, message_label).join("message-protect-summary.json")
-}
-
-pub fn device_conversation_message_open_summary_path(
-    device_label: &str,
-    conversation_label: &str,
-    message_label: &str,
-) -> PathBuf {
-    device_conversation_state_dir(device_label, conversation_label)
-        .join("opened-messages")
-        .join(message_label)
-        .join("message-open-summary.json")
 }
 
 #[derive(Debug, Clone)]
