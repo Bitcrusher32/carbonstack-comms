@@ -1,60 +1,138 @@
 ﻿# CarbonStack OpenMLS Sidecar
 
-Classification: Phase 2D experimental provider sidecar prototype.
+Classification: Phase 2D / Phase 2E-prep promoted development sidecar.
 
-This crate is the first runtime-boundary sidecar experiment after Phase 2C closure.
+This crate is the maintained OpenMLS sidecar scaffold for CarbonStackComms development.
 
-It is intentionally separate from the older OpenMLS minimal scratch crate:
+It was promoted from the Phase 2D research sidecar after the mainline OpenMLS lifecycle proof closed. The research reference remains intact at:
 
-- `../openmls-minimal`
+    ../research/openmls-sidecar
 
-The scratch crate preserved OpenMLS feasibility research.
+Use this promoted sidecar for active development and contract tests.
 
-This sidecar crate is for command-surface and runtime-boundary shaping.
+## Status
 
-## Current supported command
+This sidecar is dev-local and experimental.
 
-```powershell
-cargo run -- provider-info
-```
+It is not production E2EE.
 
-The command prints JSON describing the experimental provider.
+It is not wired into the CarbonStackComms runtime send/inbox path.
 
-## Current unsupported commands
+It is not wired into CarbonStackCypher.
 
-These are intentionally not implemented yet:
+It does not mutate `trust.json` or `trust-events.jsonl`.
 
-- `identity-create`
-- `public-bundle-export`
-- `conversation-create`
-- `conversation-add-member`
-- `conversation-join`
-- `message-protect`
-- `message-open`
-- `state-checkpoint`
-- `state-load-check`
+It uses dev-local signer/provider storage and does not implement production secure vault storage.
 
-## Security status
+Generated sidecar state must not be committed.
 
-This sidecar is not production E2EE.
+## Supported commands
 
-This sidecar does not generate or handle real user secrets.
+The current promoted sidecar supports:
 
-This sidecar is not wired into CarbonStackComms.
+    provider-info
+    identity-create
+    identity-status
+    public-bundle-export
+    conversation-create
+    conversation-load-check
+    conversation-add-member
+    conversation-join
+    message-protect
+    message-open
 
-This sidecar is not wired into CarbonStackCypher.
+Still unsupported:
 
-This sidecar does not mutate `trust.json`.
+    state-checkpoint
+    state-load-check
 
-This sidecar does not write provider storage.
+## Current validated lifecycle
 
-## Phase 2D goal
+The Go contract tests validate a dev-local Alice/Bob lifecycle:
 
-The immediate Phase 2D goal is to prove that CarbonStack can maintain a small, explicit, JSON-speaking provider-sidecar boundary without coupling OpenMLS directly into the Go CLI.
+    identity-create
+    identity-status
+    public-bundle-export
+    public-bundle-export --write-artifact
+    conversation-create
+    conversation-load-check
+    conversation-add-member
+    conversation-join
+    message-protect
+    message-open
+    two sequential message labels
+    out-of-order same-sender open
+    duplicate/replay rejection
+    corrupt/truncated artifact rejection
+    wrong-device rejection
+    wrong-conversation rejection
+    bidirectional Alice/Bob message flow
 
-The first milestone is deliberately boring:
+## Dev-state layout
 
-- build the sidecar
-- run `provider-info`
-- validate JSON output shape
-- keep all secret-bearing commands unsupported
+Generated local state lives under:
+
+    .carbonstack-openmls-sidecar-state/dev/
+
+Current conversation state is device-scoped:
+
+    .carbonstack-openmls-sidecar-state/dev/devices/<device-label>/conversations/<conversation-label>/
+
+Important local-only sensitive files:
+
+    signer.json
+    provider-storage.json
+
+Important opaque protocol artifacts:
+
+    public-bundle.keypackage.bin
+    welcome.bin
+    application-message.bin
+
+Do not print, paste, inspect casually, expose, or commit secret-bearing generated state.
+
+## Test ownership
+
+The Go contract tests are split by ownership:
+
+    internal/protocol/openmls_sidecar_helpers_test.go
+    internal/protocol/openmls_sidecar_provider_info_test.go
+    internal/protocol/openmls_sidecar_identity_test.go
+    internal/protocol/openmls_sidecar_public_bundle_test.go
+    internal/protocol/openmls_sidecar_conversation_test.go
+    internal/protocol/openmls_sidecar_message_test.go
+    internal/protocol/openmls_sidecar_message_negative_test.go
+
+These tests target this promoted sidecar path.
+
+## Validation
+
+From the sidecar crate:
+
+    cargo check
+    cargo test
+    cargo run -- provider-info
+
+From the `carbonstack-comms` repo root:
+
+    go test -p 1 ./internal/protocol
+    go test -p 1 ./...
+    powershell -ExecutionPolicy Bypass -File .\scripts\check-no-rust-artifacts.ps1
+
+## Current non-goals
+
+Do not claim:
+
+    production E2EE
+    Signal-equivalent security
+    hostile-server proof
+    metadata privacy
+    production vault storage
+    Android / Pixel 4a validation
+    Comms runtime OpenMLS integration
+    Cypher MLS artifact routing
+    trust-state mutation from sidecar events
+
+Next planned rung after README/current-state cleanup:
+
+    v0.2.47 — Cypher minimal opaque MLS artifact relay recon.

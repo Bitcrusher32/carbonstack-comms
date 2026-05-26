@@ -225,7 +225,7 @@ pub fn print_public_bundle_export_success(result: &PublicBundleExportResult) {
             },
             "private material was loaded locally but not printed",
             "OpenMLS is not wired into CarbonStackComms",
-            "conversation lifecycle is not implemented"
+            "conversation lifecycle is implemented for dev-local OpenMLS sidecar flows"
         ],
         "private_material_included": false
     });

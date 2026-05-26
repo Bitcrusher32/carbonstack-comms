@@ -1,4 +1,15 @@
-﻿# CarbonStack OpenMLS Sidecar
+﻿# Frozen Research Reference Notice
+
+This crate is preserved as the known-good Phase 2D research sidecar reference.
+
+Active maintained sidecar work has moved to:
+
+    ../../openmls-sidecar
+
+Do not use this README as the current command/status map. It intentionally preserves older research-stage context.
+
+---
+# CarbonStack OpenMLS Sidecar
 
 Classification: Phase 2D experimental provider sidecar prototype.
 
@@ -58,3 +69,4 @@ The first milestone is deliberately boring:
 - run `provider-info`
 - validate JSON output shape
 - keep all secret-bearing commands unsupported
+

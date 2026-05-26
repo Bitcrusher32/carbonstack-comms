@@ -67,9 +67,7 @@ fn print_help() {
     println!();
     println!("Supported commands:");
     println!("  provider-info");
-    println!(
-        "  identity-create --device-label <label>   (recognized, validates label, not implemented)"
-    );
+    println!("  identity-create --device-label <label>");
     println!();
     println!("Unsupported intentionally:");
     for command in UNSUPPORTED_COMMANDS {
@@ -256,8 +254,8 @@ fn print_conversation_create_success(result: &ConversationCreateResult) {
             "provider storage is dev-only and not production secure vault storage",
             "private material was loaded locally but not printed",
             "conversation-add-member is implemented for dev-local Welcome export",
-            "conversation-join is not implemented",
-            "message protect/open is not implemented"
+            "conversation-join is implemented for dev-local Welcome consumption",
+            "message protect/open is implemented for dev-local OpenMLS application messages"
         ],
         "private_material_included": false
     });
@@ -568,8 +566,8 @@ fn print_conversation_add_member_success(result: &ConversationAddMemberResult) {
             "dev-only OpenMLS add-member and Welcome export",
             "Welcome artifact was written but not printed",
             "provider storage is dev-only and not production secure vault storage",
-            "conversation-join is not implemented",
-            "message protect/open is not implemented"
+            "conversation-join is implemented for dev-local Welcome consumption",
+            "message protect/open is implemented for dev-local OpenMLS application messages"
         ]
     });
 
@@ -1348,7 +1346,7 @@ fn print_conversation_join_success(result: &ConversationJoinResult) {
             "dev-only OpenMLS conversation join",
             "Welcome artifact was consumed locally but not printed",
             "provider storage is dev-only and not production secure vault storage",
-            "message protect/open is not implemented"
+            "message protect/open is implemented for dev-local OpenMLS application messages"
         ]
     });
 
@@ -1566,8 +1564,8 @@ fn print_conversation_load_check_success(result: &ConversationLoadCheckResult) {
             "provider storage is not production secure vault storage",
             "private material may be required locally by OpenMLS but is not printed",
             "conversation-add-member is implemented for dev-local Welcome export",
-            "conversation-join is not implemented",
-            "message protect/open is not implemented"
+            "conversation-join is implemented for dev-local Welcome consumption",
+            "message protect/open is implemented for dev-local OpenMLS application messages"
         ]
     });
 
