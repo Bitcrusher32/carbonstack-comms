@@ -17,3 +17,7 @@ target/
 
 # CarbonStack OpenMLS sidecar local dev state
 internal/protocol/mls/research/openmls-sidecar/.carbonstack-openmls-sidecar-state/
+
+# CarbonStack OpenMLS sidecar generated local state/build output
+internal/protocol/mls/**/.carbonstack-openmls-sidecar-state/
+internal/protocol/mls/**/target/

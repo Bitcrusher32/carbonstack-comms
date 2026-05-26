@@ -9,8 +9,8 @@ import (
 	"testing"
 )
 
-const openMLSSidecarDir = "mls/research/openmls-sidecar"
-const openMLSSidecarStateDir = "mls/research/openmls-sidecar/.carbonstack-openmls-sidecar-state"
+const openMLSSidecarDir = "mls/openmls-sidecar"
+const openMLSSidecarStateDir = "mls/openmls-sidecar/.carbonstack-openmls-sidecar-state"
 
 type openMLSSidecarEnvelope struct {
 	OK                      bool                          `json:"ok"`
