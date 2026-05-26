@@ -1279,9 +1279,8 @@ func TestOpenMLSSidecarConversationCreate(t *testing.T) {
 
 	assertNoSecretMaterialInStdout(t, conversationOutput)
 
-	stateDir := filepath.Join(openMLSSidecarDir, ".carbonstack-openmls-sidecar-state", "dev", "conversations", "carbonstack-test-conversation")
-	conversationSummaryPath := filepath.Join(stateDir, "conversation-summary.json")
-	providerStoragePath := filepath.Join(stateDir, "provider-storage.json")
+	conversationSummaryPath := filepath.Join(openMLSSidecarDir, conversationEnvelope.Data.ConversationSummaryPathHint)
+	providerStoragePath := filepath.Join(openMLSSidecarDir, conversationEnvelope.Data.ProviderStoragePathHint)
 	signerPath := filepath.Join(openMLSSidecarDir, ".carbonstack-openmls-sidecar-state", "dev", "devices", "carbonstack-alice-device", "signer.json")
 
 	assertFileExists(t, conversationSummaryPath)
