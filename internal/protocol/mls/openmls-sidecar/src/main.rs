@@ -1,6 +1,7 @@
 mod labels;
 mod paths;
 mod provider;
+mod schema;
 mod state;
 
 use labels::{validate_conversation_label, validate_device_label};
