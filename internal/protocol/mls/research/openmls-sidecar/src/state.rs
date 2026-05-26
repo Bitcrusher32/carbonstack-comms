@@ -1,4 +1,4 @@
-﻿use crate::provider::CarbonStackSidecarProvider;
+use crate::provider::CarbonStackSidecarProvider;
 use openmls::key_packages::KeyPackageIn;
 use openmls::prelude::*;
 use openmls::versions::ProtocolVersion;
@@ -663,9 +663,11 @@ pub fn create_dev_conversation(
 ) -> io::Result<ConversationCreateResult> {
     let status = load_dev_identity_status(device_label)?;
 
-    let conversation_state_dir = conversation_state_dir(conversation_label);
-    let conversation_summary_path = conversation_summary_path(conversation_label);
-    let provider_storage_path = conversation_provider_storage_path(conversation_label);
+    let conversation_state_dir = device_conversation_state_dir(device_label, conversation_label);
+    let conversation_summary_path =
+        device_conversation_summary_path(device_label, conversation_label);
+    let provider_storage_path =
+        device_conversation_provider_storage_path(device_label, conversation_label);
 
     if conversation_summary_path.exists() || provider_storage_path.exists() {
         return Err(io::Error::new(
@@ -794,9 +796,11 @@ pub fn load_dev_conversation_status(
 ) -> io::Result<ConversationLoadCheckResult> {
     let _status = load_dev_identity_status(device_label)?;
 
-    let conversation_state_dir = conversation_state_dir(conversation_label);
-    let conversation_summary_path = conversation_summary_path(conversation_label);
-    let provider_storage_path = conversation_provider_storage_path(conversation_label);
+    let conversation_state_dir = device_conversation_state_dir(device_label, conversation_label);
+    let conversation_summary_path =
+        device_conversation_summary_path(device_label, conversation_label);
+    let provider_storage_path =
+        device_conversation_provider_storage_path(device_label, conversation_label);
 
     if !conversation_summary_path.exists() {
         return Err(io::Error::new(
@@ -998,12 +1002,17 @@ pub fn add_dev_conversation_member(
 
     validate_member_keypackage_path(member_keypackage_path)?;
 
-    let conversation_state_dir = conversation_state_dir(conversation_label);
-    let conversation_summary_path = conversation_summary_path(conversation_label);
-    let provider_storage_path = conversation_provider_storage_path(conversation_label);
-    let welcome_artifact_path = conversation_welcome_artifact_path(conversation_label);
-    let welcome_manifest_path = conversation_welcome_manifest_path(conversation_label);
-    let add_member_summary_path = conversation_add_member_summary_path(conversation_label);
+    let conversation_state_dir = device_conversation_state_dir(device_label, conversation_label);
+    let conversation_summary_path =
+        device_conversation_summary_path(device_label, conversation_label);
+    let provider_storage_path =
+        device_conversation_provider_storage_path(device_label, conversation_label);
+    let welcome_artifact_path =
+        device_conversation_welcome_artifact_path(device_label, conversation_label);
+    let welcome_manifest_path =
+        device_conversation_welcome_manifest_path(device_label, conversation_label);
+    let add_member_summary_path =
+        device_conversation_add_member_summary_path(device_label, conversation_label);
 
     if !conversation_summary_path.exists() {
         return Err(io::Error::new(
@@ -1223,6 +1232,65 @@ pub fn device_conversation_join_summary_path(
     conversation_label: &str,
 ) -> PathBuf {
     device_conversation_state_dir(device_label, conversation_label).join("join-summary.json")
+}
+pub fn device_conversation_welcome_artifact_path(
+    device_label: &str,
+    conversation_label: &str,
+) -> PathBuf {
+    device_conversation_state_dir(device_label, conversation_label).join("welcome.bin")
+}
+
+pub fn device_conversation_welcome_manifest_path(
+    device_label: &str,
+    conversation_label: &str,
+) -> PathBuf {
+    device_conversation_state_dir(device_label, conversation_label).join("welcome-manifest.json")
+}
+
+pub fn device_conversation_add_member_summary_path(
+    device_label: &str,
+    conversation_label: &str,
+) -> PathBuf {
+    device_conversation_state_dir(device_label, conversation_label).join("add-member-summary.json")
+}
+
+pub fn device_conversation_messages_dir(device_label: &str, conversation_label: &str) -> PathBuf {
+    device_conversation_state_dir(device_label, conversation_label).join("messages")
+}
+
+pub fn device_conversation_message_dir(
+    device_label: &str,
+    conversation_label: &str,
+    message_label: &str,
+) -> PathBuf {
+    device_conversation_messages_dir(device_label, conversation_label).join(message_label)
+}
+
+pub fn device_conversation_message_artifact_path(
+    device_label: &str,
+    conversation_label: &str,
+    message_label: &str,
+) -> PathBuf {
+    device_conversation_message_dir(device_label, conversation_label, message_label)
+        .join("application-message.bin")
+}
+
+pub fn device_conversation_message_manifest_path(
+    device_label: &str,
+    conversation_label: &str,
+    message_label: &str,
+) -> PathBuf {
+    device_conversation_message_dir(device_label, conversation_label, message_label)
+        .join("message-manifest.json")
+}
+
+pub fn device_conversation_message_protect_summary_path(
+    device_label: &str,
+    conversation_label: &str,
+    message_label: &str,
+) -> PathBuf {
+    device_conversation_message_dir(device_label, conversation_label, message_label)
+        .join("message-protect-summary.json")
 }
 
 #[derive(Debug, Clone)]
@@ -1854,8 +1922,9 @@ pub fn protect_dev_message(
         io::Error::new(io::ErrorKind::Other, format!("signer load failed: {err}"))
     })?;
 
-    let conversation_state_dir = conversation_state_dir(conversation_label);
-    let provider_storage_path = conversation_provider_storage_path(conversation_label);
+    let conversation_state_dir = device_conversation_state_dir(device_label, conversation_label);
+    let provider_storage_path =
+        device_conversation_provider_storage_path(device_label, conversation_label);
 
     if !provider_storage_path.exists() {
         return Err(io::Error::new(
