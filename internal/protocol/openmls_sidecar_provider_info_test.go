@@ -2402,6 +2402,94 @@ func assertMessageOpenSuccess(t *testing.T, envelope openMLSSidecarEnvelope, mes
 	}
 }
 
+func TestOpenMLSSidecarMessageOpenWrongDeviceRejected(t *testing.T) {
+	removeOpenMLSSidecarState(t)
+
+	addMemberEnvelope := setupOpenMLSTwoMemberConversation(t)
+
+	eveIdentityOutput, eveIdentityErr := runOpenMLSSidecar("identity-create", "--device-label", "carbonstack-eve-device")
+	if eveIdentityErr != nil {
+		t.Fatalf("eve identity-create failed: %v\n%s", eveIdentityErr, string(eveIdentityOutput))
+	}
+
+	message1ProtectEnvelope := protectOpenMLSSidecarMessage(t, "message-0001", "hello bob wrong device probe")
+
+	wrongDeviceOutput, wrongDeviceErr := runOpenMLSSidecar(
+		"message-open",
+		"--device-label", "carbonstack-eve-device",
+		"--conversation-label", "carbonstack-test-conversation",
+		"--message-label", "wrong-device-message-0001",
+		"--message", message1ProtectEnvelope.Data.MessageArtifactPathHint,
+	)
+	assertExitCode(t, wrongDeviceErr, 3)
+
+	wrongDeviceEnvelope := parseSidecarEnvelope(t, wrongDeviceOutput)
+	if wrongDeviceEnvelope.OK {
+		t.Fatal("wrong-device message-open ok = true, want false")
+	}
+
+	assertSidecarError(t, wrongDeviceEnvelope, "conversation_or_message_missing", "provider.conversation.missing", "warning", false)
+
+	if wrongDeviceEnvelope.Error == nil {
+		t.Fatal("wrong-device message-open should include error")
+	}
+
+	if wrongDeviceEnvelope.Error.Message != "device conversation provider storage is missing" {
+		t.Fatalf("wrong-device message-open error message = %q, want device conversation provider storage is missing", wrongDeviceEnvelope.Error.Message)
+	}
+
+	if wrongDeviceEnvelope.Data.DeviceLabel != "carbonstack-eve-device" {
+		t.Fatalf("wrong-device data device_label = %q, want carbonstack-eve-device", wrongDeviceEnvelope.Data.DeviceLabel)
+	}
+
+	if wrongDeviceEnvelope.Data.ConversationLabel != addMemberEnvelope.Data.ConversationLabel {
+		t.Fatalf("wrong-device data conversation_label = %q, want %q", wrongDeviceEnvelope.Data.ConversationLabel, addMemberEnvelope.Data.ConversationLabel)
+	}
+
+	assertNoSecretMaterialInStdout(t, wrongDeviceOutput)
+}
+
+func TestOpenMLSSidecarMessageOpenWrongConversationRejected(t *testing.T) {
+	removeOpenMLSSidecarState(t)
+
+	setupOpenMLSTwoMemberConversation(t)
+
+	message1ProtectEnvelope := protectOpenMLSSidecarMessage(t, "message-0001", "hello bob wrong conversation probe")
+
+	wrongConversationOutput, wrongConversationErr := runOpenMLSSidecar(
+		"message-open",
+		"--device-label", "carbonstack-bob-device",
+		"--conversation-label", "carbonstack-wrong-conversation",
+		"--message-label", "wrong-conversation-message-0001",
+		"--message", message1ProtectEnvelope.Data.MessageArtifactPathHint,
+	)
+	assertExitCode(t, wrongConversationErr, 3)
+
+	wrongConversationEnvelope := parseSidecarEnvelope(t, wrongConversationOutput)
+	if wrongConversationEnvelope.OK {
+		t.Fatal("wrong-conversation message-open ok = true, want false")
+	}
+
+	assertSidecarError(t, wrongConversationEnvelope, "conversation_or_message_missing", "provider.conversation.missing", "warning", false)
+
+	if wrongConversationEnvelope.Error == nil {
+		t.Fatal("wrong-conversation message-open should include error")
+	}
+
+	if wrongConversationEnvelope.Error.Message != "device conversation provider storage is missing" {
+		t.Fatalf("wrong-conversation message-open error message = %q, want device conversation provider storage is missing", wrongConversationEnvelope.Error.Message)
+	}
+
+	if wrongConversationEnvelope.Data.DeviceLabel != "carbonstack-bob-device" {
+		t.Fatalf("wrong-conversation data device_label = %q, want carbonstack-bob-device", wrongConversationEnvelope.Data.DeviceLabel)
+	}
+
+	if wrongConversationEnvelope.Data.ConversationLabel != "carbonstack-wrong-conversation" {
+		t.Fatalf("wrong-conversation data conversation_label = %q, want carbonstack-wrong-conversation", wrongConversationEnvelope.Data.ConversationLabel)
+	}
+
+	assertNoSecretMaterialInStdout(t, wrongConversationOutput)
+}
 func TestOpenMLSSidecarMessageOpenOutOfOrderTwoMessageDelivery(t *testing.T) {
 	removeOpenMLSSidecarState(t)
 
