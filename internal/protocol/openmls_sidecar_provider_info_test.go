@@ -2402,6 +2402,232 @@ func assertMessageOpenSuccess(t *testing.T, envelope openMLSSidecarEnvelope, mes
 		t.Fatalf("%s open should return message open summary path", messageLabel)
 	}
 }
+
+func TestOpenMLSSidecarMessageOpenOutOfOrderTwoMessageDelivery(t *testing.T) {
+	removeOpenMLSSidecarState(t)
+
+	addMemberEnvelope := setupOpenMLSTwoMemberConversation(t)
+
+	message1ProtectEnvelope := protectOpenMLSSidecarMessage(t, "message-0001", "hello bob 1")
+	message2ProtectEnvelope := protectOpenMLSSidecarMessage(t, "message-0002", "hello bob 2")
+
+	message2OpenEnvelope, message2OpenOutput := openOpenMLSSidecarMessage(t, "message-0002", message2ProtectEnvelope.Data.MessageArtifactPathHint)
+	assertMessageOpenSuccess(t, message2OpenEnvelope, "message-0002", "hello bob 2", addMemberEnvelope.Data.GroupIDRef)
+	assertNoSecretMaterialInStdout(t, message2OpenOutput)
+
+	message1OpenEnvelope, message1OpenOutput := openOpenMLSSidecarMessage(t, "message-0001", message1ProtectEnvelope.Data.MessageArtifactPathHint)
+	assertMessageOpenSuccess(t, message1OpenEnvelope, "message-0001", "hello bob 1", addMemberEnvelope.Data.GroupIDRef)
+	assertNoSecretMaterialInStdout(t, message1OpenOutput)
+}
+
+func TestOpenMLSSidecarMessageOpenDuplicateRejected(t *testing.T) {
+	removeOpenMLSSidecarState(t)
+
+	addMemberEnvelope := setupOpenMLSTwoMemberConversation(t)
+
+	message1ProtectEnvelope := protectOpenMLSSidecarMessage(t, "message-0001", "hello bob 1")
+
+	message1OpenEnvelope, message1OpenOutput := openOpenMLSSidecarMessage(t, "message-0001", message1ProtectEnvelope.Data.MessageArtifactPathHint)
+	assertMessageOpenSuccess(t, message1OpenEnvelope, "message-0001", "hello bob 1", addMemberEnvelope.Data.GroupIDRef)
+	assertNoSecretMaterialInStdout(t, message1OpenOutput)
+
+	duplicateOpenOutput, duplicateOpenErr := runOpenMLSSidecar(
+		"message-open",
+		"--device-label", "carbonstack-bob-device",
+		"--conversation-label", "carbonstack-test-conversation",
+		"--message-label", "message-0001-duplicate",
+		"--message", message1ProtectEnvelope.Data.MessageArtifactPathHint,
+	)
+	assertExitCode(t, duplicateOpenErr, 3)
+
+	duplicateOpenEnvelope := parseSidecarEnvelope(t, duplicateOpenOutput)
+	if duplicateOpenEnvelope.OK {
+		t.Fatal("duplicate message-open ok = true, want false")
+	}
+
+	assertSidecarError(t, duplicateOpenEnvelope, "message_open_failed", "checkpoint.failed", "warning", false)
+
+	if duplicateOpenEnvelope.Error == nil {
+		t.Fatal("duplicate message-open should include error")
+	}
+
+	if !strings.Contains(duplicateOpenEnvelope.Error.Message, "SecretReuseError") {
+		t.Fatalf("duplicate message-open error message = %q, want SecretReuseError", duplicateOpenEnvelope.Error.Message)
+	}
+
+	assertNoSecretMaterialInStdout(t, duplicateOpenOutput)
+}
+
+func TestOpenMLSSidecarMessageOpenCorruptArtifactRejected(t *testing.T) {
+	removeOpenMLSSidecarState(t)
+
+	setupOpenMLSTwoMemberConversation(t)
+
+	message1ProtectEnvelope := protectOpenMLSSidecarMessage(t, "message-0001", "hello bob 1")
+
+	goodPath := filepath.Join(openMLSSidecarDir, message1ProtectEnvelope.Data.MessageArtifactPathHint)
+	badPath := filepath.Join(filepath.Dir(goodPath), "corrupt-application-message.bin")
+	badPathHint, relErr := filepath.Rel(openMLSSidecarDir, badPath)
+	if relErr != nil {
+		t.Fatalf("make corrupt message artifact relative path: %v", relErr)
+	}
+	badPathHint = "." + string(os.PathSeparator) + badPathHint
+
+	goodBytes, readErr := os.ReadFile(filepath.Clean(goodPath))
+	if readErr != nil {
+		t.Fatalf("read good message artifact: %v", readErr)
+	}
+
+	if len(goodBytes) < 20 {
+		t.Fatalf("message artifact too short to truncate safely: len=%d", len(goodBytes))
+	}
+
+	truncatedBytes := append([]byte(nil), goodBytes[:len(goodBytes)-10]...)
+	if writeErr := os.WriteFile(filepath.Clean(badPath), truncatedBytes, 0o600); writeErr != nil {
+		t.Fatalf("write corrupt message artifact: %v", writeErr)
+	}
+
+	corruptOpenOutput, corruptOpenErr := runOpenMLSSidecar(
+		"message-open",
+		"--device-label", "carbonstack-bob-device",
+		"--conversation-label", "carbonstack-test-conversation",
+		"--message-label", "corrupt-message-0001",
+		"--message", badPathHint,
+	)
+	assertExitCode(t, corruptOpenErr, 3)
+
+	corruptOpenEnvelope := parseSidecarEnvelope(t, corruptOpenOutput)
+	if corruptOpenEnvelope.OK {
+		t.Fatal("corrupt message-open ok = true, want false")
+	}
+
+	assertSidecarError(t, corruptOpenEnvelope, "message_artifact_invalid", "provider.message.invalid", "warning", false)
+
+	if corruptOpenEnvelope.Error == nil {
+		t.Fatal("corrupt message-open should include error")
+	}
+
+	if !strings.Contains(corruptOpenEnvelope.Error.Message, "EndOfStream") {
+		t.Fatalf("corrupt message-open error message = %q, want EndOfStream", corruptOpenEnvelope.Error.Message)
+	}
+
+	assertNoSecretMaterialInStdout(t, corruptOpenOutput)
+}
+
+func setupOpenMLSTwoMemberConversation(t *testing.T) openMLSSidecarEnvelope {
+	t.Helper()
+
+	aliceIdentityOutput, aliceIdentityErr := runOpenMLSSidecar("identity-create", "--device-label", "carbonstack-alice-device")
+	if aliceIdentityErr != nil {
+		t.Fatalf("alice identity-create failed: %v\n%s", aliceIdentityErr, string(aliceIdentityOutput))
+	}
+
+	bobIdentityOutput, bobIdentityErr := runOpenMLSSidecar("identity-create", "--device-label", "carbonstack-bob-device")
+	if bobIdentityErr != nil {
+		t.Fatalf("bob identity-create failed: %v\n%s", bobIdentityErr, string(bobIdentityOutput))
+	}
+
+	bobBundleOutput, bobBundleErr := runOpenMLSSidecar("public-bundle-export", "--device-label", "carbonstack-bob-device", "--write-artifact")
+	if bobBundleErr != nil {
+		t.Fatalf("bob public-bundle-export failed: %v\n%s", bobBundleErr, string(bobBundleOutput))
+	}
+
+	bobBundleEnvelope := parseSidecarEnvelope(t, bobBundleOutput)
+	if !bobBundleEnvelope.OK {
+		t.Fatal("bob public-bundle-export ok = false, want true")
+	}
+
+	if !bobBundleEnvelope.Data.ProviderStorageWritten {
+		t.Fatal("bob public-bundle-export should persist provider storage for later Welcome consumption")
+	}
+
+	aliceConversationOutput, aliceConversationErr := runOpenMLSSidecar("conversation-create", "--device-label", "carbonstack-alice-device", "--conversation-label", "carbonstack-test-conversation")
+	if aliceConversationErr != nil {
+		t.Fatalf("alice conversation-create failed: %v\n%s", aliceConversationErr, string(aliceConversationOutput))
+	}
+
+	addMemberOutput, addMemberErr := runOpenMLSSidecar(
+		"conversation-add-member",
+		"--device-label", "carbonstack-alice-device",
+		"--conversation-label", "carbonstack-test-conversation",
+		"--member-keypackage", bobBundleEnvelope.Data.KeyPackageArtifactPathHint,
+	)
+	if addMemberErr != nil {
+		t.Fatalf("conversation-add-member failed: %v\n%s", addMemberErr, string(addMemberOutput))
+	}
+
+	addMemberEnvelope := parseSidecarEnvelope(t, addMemberOutput)
+	if !addMemberEnvelope.OK {
+		t.Fatal("conversation-add-member ok = false, want true")
+	}
+
+	joinOutput, joinErr := runOpenMLSSidecar(
+		"conversation-join",
+		"--device-label", "carbonstack-bob-device",
+		"--conversation-label", "carbonstack-test-conversation",
+		"--welcome", addMemberEnvelope.Data.WelcomeArtifactPathHint,
+	)
+	if joinErr != nil {
+		t.Fatalf("conversation-join failed: %v\n%s", joinErr, string(joinOutput))
+	}
+
+	joinEnvelope := parseSidecarEnvelope(t, joinOutput)
+	if !joinEnvelope.OK {
+		t.Fatal("conversation-join ok = false, want true")
+	}
+
+	if joinEnvelope.Data.GroupIDRef != addMemberEnvelope.Data.GroupIDRef {
+		t.Fatalf("join group_id_ref = %q, add-member group_id_ref = %q", joinEnvelope.Data.GroupIDRef, addMemberEnvelope.Data.GroupIDRef)
+	}
+
+	return addMemberEnvelope
+}
+
+func protectOpenMLSSidecarMessage(t *testing.T, messageLabel string, plaintext string) openMLSSidecarEnvelope {
+	t.Helper()
+
+	protectOutput, protectErr := runOpenMLSSidecar(
+		"message-protect",
+		"--device-label", "carbonstack-alice-device",
+		"--conversation-label", "carbonstack-test-conversation",
+		"--message-label", messageLabel,
+		"--plaintext", plaintext,
+	)
+	if protectErr != nil {
+		t.Fatalf("%s protect failed: %v\n%s", messageLabel, protectErr, string(protectOutput))
+	}
+
+	protectEnvelope := parseSidecarEnvelope(t, protectOutput)
+	if !protectEnvelope.OK {
+		t.Fatalf("%s protect ok = false, want true", messageLabel)
+	}
+
+	assertNoSecretMaterialInStdout(t, protectOutput)
+
+	return protectEnvelope
+}
+
+func openOpenMLSSidecarMessage(t *testing.T, messageLabel string, messageArtifactPath string) (openMLSSidecarEnvelope, []byte) {
+	t.Helper()
+
+	openOutput, openErr := runOpenMLSSidecar(
+		"message-open",
+		"--device-label", "carbonstack-bob-device",
+		"--conversation-label", "carbonstack-test-conversation",
+		"--message-label", messageLabel,
+		"--message", messageArtifactPath,
+	)
+	if openErr != nil {
+		t.Fatalf("%s open failed: %v\n%s", messageLabel, openErr, string(openOutput))
+	}
+
+	openEnvelope := parseSidecarEnvelope(t, openOutput)
+	if !openEnvelope.OK {
+		t.Fatalf("%s open ok = false, want true", messageLabel)
+	}
+
+	return openEnvelope, openOutput
+}
 func runOpenMLSSidecar(args ...string) ([]byte, error) {
 	sidecarDir := filepath.Clean(openMLSSidecarDir)
 
