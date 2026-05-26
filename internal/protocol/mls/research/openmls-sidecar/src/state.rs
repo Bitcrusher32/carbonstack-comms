@@ -1933,13 +1933,17 @@ pub fn protect_dev_message(
         ));
     }
 
-    let message_dir = conversation_message_dir(conversation_label, message_label);
+    let message_dir =
+        device_conversation_message_dir(device_label, conversation_label, message_label);
     let message_artifact_path =
-        conversation_message_artifact_path(conversation_label, message_label);
+        device_conversation_message_artifact_path(device_label, conversation_label, message_label);
     let message_manifest_path =
-        conversation_message_manifest_path(conversation_label, message_label);
-    let message_protect_summary_path =
-        conversation_message_protect_summary_path(conversation_label, message_label);
+        device_conversation_message_manifest_path(device_label, conversation_label, message_label);
+    let message_protect_summary_path = device_conversation_message_protect_summary_path(
+        device_label,
+        conversation_label,
+        message_label,
+    );
 
     if message_dir.exists() {
         return Err(io::Error::new(
