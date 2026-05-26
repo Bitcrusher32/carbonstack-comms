@@ -1,9 +1,16 @@
+mod envelope;
 mod labels;
 mod paths;
 mod provider;
 mod schema;
 mod state;
 
+use envelope::{
+    CAPABILITIES, PHASE_CONVERSATION_ADD_MEMBER, PHASE_CONVERSATION_CREATE,
+    PHASE_CONVERSATION_JOIN, PHASE_IDENTITY_CREATE, PHASE_IDENTITY_STATUS, PHASE_MESSAGE_OPEN,
+    PHASE_MESSAGE_PROTECT, PHASE_PROVIDER_INFO, PHASE_PUBLIC_BUNDLE_EXPORT, UNSUPPORTED_COMMANDS,
+    json_escape, print_provider_info,
+};
 use labels::{validate_conversation_label, validate_device_label};
 use state::{
     ConversationAddMemberResult, ConversationCreateResult, ConversationJoinResult,
@@ -19,37 +26,6 @@ use std::io;
 const PROVIDER_NAME: &str = "openmls";
 const IMPLEMENTATION: &str = "carbonstack-openmls-sidecar";
 const MODE: &str = "experimental-sidecar";
-const PHASE_PROVIDER_INFO: &str = "phase2d-provider-info";
-const PHASE_IDENTITY_CREATE: &str = "phase2d-identity-create-dev";
-const PHASE_IDENTITY_STATUS: &str = "phase2d-identity-status-dev";
-const PHASE_PUBLIC_BUNDLE_EXPORT: &str = "phase2d-public-bundle-export-dev";
-const PHASE_CONVERSATION_CREATE: &str = "phase2d-conversation-create-dev";
-const PHASE_CONVERSATION_ADD_MEMBER: &str = "phase2d-conversation-add-member-dev";
-const PHASE_CONVERSATION_JOIN: &str = "phase2d-conversation-join-dev";
-const PHASE_MESSAGE_PROTECT: &str = "phase2d-message-protect-dev";
-const PHASE_MESSAGE_OPEN: &str = "phase2d-message-open-dev";
-
-const WARNINGS: [&str; 4] = [
-    "OpenMLS is not wired into CarbonStackComms",
-    "Cypher does not route MLS payloads",
-    "trust-state storage does not consume provider events",
-    "identity-create writes dev-only secret-bearing signer state but never prints private material",
-];
-
-const CAPABILITIES: &[&str] = &[
-    "provider-info",
-    "identity-create",
-    "identity-status",
-    "public-bundle-export",
-    "conversation-create",
-    "conversation-load-check",
-    "conversation-add-member",
-    "conversation-join",
-    "message-protect",
-    "message-open",
-];
-
-const UNSUPPORTED_COMMANDS: &[&str] = &["state-checkpoint", "state-load-check"];
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -1940,35 +1916,6 @@ fn parse_device_label(args: &[String]) -> Option<&str> {
     None
 }
 
-fn print_provider_info() {
-    let envelope = serde_json::json!({
-        "ok": true,
-        "command": "provider-info",
-        "provider": PROVIDER_NAME,
-        "implementation": IMPLEMENTATION,
-        "mode": MODE,
-        "phase": PHASE_PROVIDER_INFO,
-        "data": {
-            "capabilities": CAPABILITIES,
-            "unsupported": UNSUPPORTED_COMMANDS,
-            "security_level": "experimental; not production E2EE"
-        },
-        "events": [],
-        "warnings": [
-            WARNINGS[0],
-            WARNINGS[1],
-            WARNINGS[2],
-            WARNINGS[3],
-            "identity-create writes dev-only OpenMLS identity material locally but does not print private material"
-        ],
-        "private_material_included": false
-    });
-
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&envelope).expect("provider envelope JSON should serialize")
-    );
-}
 fn print_unsupported_command(command: &str) {
     println!(
         r#"{{
@@ -2663,15 +2610,6 @@ fn print_identity_create_state_write_failed(device_label: &str, reason: &str) {
         device_label = json_escape(device_label),
     );
 }
-fn json_escape(value: &str) -> String {
-    value
-        .replace('\\', "\\\\")
-        .replace('"', "\\\"")
-        .replace('\n', "\\n")
-        .replace('\r', "\\r")
-        .replace('\t', "\\t")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
