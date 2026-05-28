@@ -49,6 +49,8 @@ type SubmitEnvelopeResponse struct {
 	EnvelopeID       string `json:"envelope_id"`
 	DeliveryState    string `json:"delivery_state"`
 	ServerReceivedAt string `json:"server_received_at"`
+	PayloadSHA256    string `json:"payload_sha256"`
+	PayloadSizeBytes int64  `json:"payload_size_bytes"`
 }
 
 type EnvelopeRecord struct {
@@ -58,6 +60,8 @@ type EnvelopeRecord struct {
 	ContentType       string `json:"content_type"`
 	ProtocolVersion   string `json:"protocol_version"`
 	CiphertextB64     string `json:"ciphertext_b64"`
+	PayloadSHA256     string `json:"payload_sha256"`
+	PayloadSizeBytes  int64  `json:"payload_size_bytes"`
 	ClientCreatedAt   string `json:"client_created_at"`
 	ServerReceivedAt  string `json:"server_received_at"`
 	DeliveryState     string `json:"delivery_state"`

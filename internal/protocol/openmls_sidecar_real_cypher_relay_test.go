@@ -1,6 +1,9 @@
 package protocol
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"path/filepath"
 	"testing"
 
@@ -287,5 +290,31 @@ func TestOpenMLSSidecarFullLifecycleRelayThroughRealCypherServer(t *testing.T) {
 	}
 	if len(bobInboxAfterMessageAck.Envelopes) != 0 {
 		t.Fatalf("expected Bob inbox to be empty after application-message ack, got %d envelopes", len(bobInboxAfterMessageAck.Envelopes))
+	}
+}
+
+func assertEnvelopePayloadMetadataPresent(t *testing.T, envelope client.EnvelopeRecord) {
+	t.Helper()
+
+	if envelope.PayloadSizeBytes <= 0 {
+		t.Fatalf("payload_size_bytes = %d, want positive", envelope.PayloadSizeBytes)
+	}
+	if len(envelope.PayloadSHA256) != 64 {
+		t.Fatalf("payload_sha256 length = %d, want 64", len(envelope.PayloadSHA256))
+	}
+
+	payload, err := base64.StdEncoding.DecodeString(envelope.CiphertextB64)
+	if err != nil {
+		t.Fatalf("decode envelope ciphertext_b64: %v", err)
+	}
+
+	if envelope.PayloadSizeBytes != int64(len(payload)) {
+		t.Fatalf("payload_size_bytes = %d, decoded length = %d", envelope.PayloadSizeBytes, len(payload))
+	}
+
+	hash := sha256.Sum256(payload)
+	wantSHA256 := hex.EncodeToString(hash[:])
+	if envelope.PayloadSHA256 != wantSHA256 {
+		t.Fatalf("payload_sha256 = %q, want %q", envelope.PayloadSHA256, wantSHA256)
 	}
 }
