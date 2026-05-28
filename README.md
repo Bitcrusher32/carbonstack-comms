@@ -23,3 +23,20 @@ It is designed for small trusted groups, hostile-server assumptions, loud trust 
 CarbonStackComms should run as a normal Android app during early development.
 
 The long-term goal is deployment inside CarbonStackOS as the primary communications interface.
+
+## Experimental OpenMLS real-Cypher relay smoke harness
+
+CarbonStackComms includes a dev/test smoke harness for the current OpenMLS relay lifecycle proof:
+
+    powershell -ExecutionPolicy Bypass -File .\scripts\smoke-openmls-real-cypher-relay.ps1
+
+For broader validation:
+
+    powershell -ExecutionPolicy Bypass -File .\scripts\smoke-openmls-real-cypher-relay.ps1 -Full
+
+This harness starts a real local CarbonStackCypher server through the Go test path, uses a temp SQLite database, runs the OpenMLS KeyPackage -> Welcome -> application-message relay lifecycle, and verifies final sidecar message-open plaintext recovery.
+
+This is experimental dev infrastructure only.
+
+It is not production E2EE, not certified secure, not externally audited, not Android-ready, and not polished Comms runtime UX. Normal `comms send` / `comms inbox` remain stub-era until a later runtime integration rung.
+
