@@ -1,121 +1,67 @@
 ﻿# CarbonStackComms Local State Model v0
 
-## Status
+Status: historical development-state plan with current-state notice
+Component: CarbonStackComms
+Maturity: experimental / pre-release
 
-Classification: PLANNED / NOT IMPLEMENTED
+This document describes early development local-state ideas.
 
-This document defines the Phase 1 CLI local state model.
+It is not the current secure vault design.
 
-It is not the final secure vault design.
+It is not a production storage model.
 
-## Design Principles
+The current OpenMLS sidecar proof uses dev-local sidecar state and generated provider/signer files. Those files are sensitive development artifacts and must not be committed.
 
-- Keep local state inspectable during development.
-- Do not claim local secrecy in Phase 1.
-- Preserve future migration path to encrypted local vault.
-- Separate account, device, trust, and message state conceptually.
+## Current warning
 
-## Local Directory
+Do not treat current local state as production-secure.
 
-Default development directory:
+Do not commit:
 
-```text
-.carbonstack-comms/
+- `.carbonstack-openmls-sidecar-state/`
+- `signer.json`
+- `provider-storage.json`
+- raw OpenMLS group/provider state
+- private keys
+- generated artifacts
+- local SQLite DB files
 
-Initial files:
+## Original development directory
 
-state.json
-trust.json
-messages.jsonl
-state.json
+The early development directory was:
 
-Purpose:
+    .carbonstack-comms/
 
-Store local account and device state.
+Early planned files included:
 
-Example:
+- `state.json`
+- `trust.json`
+- `messages.jsonl`
 
-{
-  "server_url": "http://localhost:8080",
-  "account_id": "uuid",
-  "display_name": "alice",
-  "device_id": "uuid",
-  "device_label": "alice-cli-1",
-  "public_identity_key": "stub-public-identity-key",
-  "private_identity_key_ref": "stub-private-identity-key-ref",
-  "protocol_version": "stub-v0"
-}
+These were inspectable development files, not a secure vault.
 
-Notes:
+## Future vault requirement
 
-private_identity_key_ref is a placeholder.
-No real private key security is claimed in Phase 1.
-trust.json
+A future production local vault must provide:
 
-Purpose:
+- encrypted local message storage;
+- identity key protection;
+- group state protection;
+- trust record protection;
+- revocation state protection;
+- safe lock/duress behavior;
+- memory and key lifecycle design.
 
-Store known device/contact records.
+That design is not implemented yet.
 
-Example:
+## Current implementation boundary
 
-{
-  "trusted_devices": [
-    {
-      "account_id": "uuid",
-      "device_id": "uuid",
-      "display_label": "bob-cli-1",
-      "public_identity_key": "stub-public-identity-key",
-      "trust_state": "unverified",
-      "first_seen_at": "2026-05-21T00:00:00Z",
-      "last_seen_at": "2026-05-21T00:00:00Z"
-    }
-  ]
-}
+The current validated relay proof focuses on:
 
-Initial trust states:
+- OpenMLS sidecar artifacts;
+- Cypher envelope relay;
+- payload metadata validation;
+- consume-then-ack behavior;
+- local development smoke tests.
 
-unverified
-verified
-changed
-revoked
-
-Phase 1 may use unverified only, but the model should not erase future loud trust-change UX.
-
-messages.jsonl
-
-Purpose:
-
-Store local message/event history for development.
-
-Example line:
-
-{"direction":"outbound","envelope_id":"uuid","peer_device_id":"uuid","body":"hello","created_at":"2026-05-21T00:00:00Z"}
-
-Notes:
-
-This is not secure local storage.
-Final CarbonStackComms must use an encrypted local vault.
-This file should not be used for real private communications.
-Future Vault Migration
-
-Future secure local storage should separate:
-
-identity keys
-message database
-trust records
-group state
-recovery state
-
-Phase 1 does not implement this.
-
-Non-Goals
-no encrypted local vault yet
-no Android Keystore yet
-no StrongBox yet
-no YubiKey/passkey unlock yet
-no duress integration yet
-no production local secrecy claim
-Development Warning
-
-Any Phase 1 CLI local state should be treated as plaintext development state.
-Do not use it for sensitive real-world communication.
+It does not solve production local storage.

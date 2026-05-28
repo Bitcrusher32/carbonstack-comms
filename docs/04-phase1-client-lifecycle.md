@@ -1,16 +1,22 @@
-﻿# CarbonStackComms Phase 1 Client Lifecycle
+﻿# CarbonStackComms Client Lifecycle
 
-## Status
+Status: historical Phase 1 plan with current-state notice
+Component: CarbonStackComms
+Maturity: experimental / pre-release
 
-Classification: PLANNED / NOT IMPLEMENTED
+This document originally described a Phase 1 CLI client lifecycle.
 
-This document defines the Phase 1 CLI client lifecycle.
+It is no longer the current release surface.
 
-The CLI client exists to validate CarbonStackComms message flow before Android implementation.
+The current validated proof is the OpenMLS sidecar + Cypher relay smoke path, not a polished runtime CLI messenger.
 
-## Goal
+Use the main `carbonstack` runbook for current validation:
 
-Build a minimal local client that can:
+    docs/113-experimental-backbone-deployability-runbook-v0.md
+
+## Historical Phase 1 goal
+
+The original CLI goal was to validate a minimal local client that could:
 
 1. Claim an invite.
 2. Register a device.
@@ -22,105 +28,46 @@ Build a minimal local client that can:
 8. Decode/decrypt through a mock provider.
 9. Acknowledge delivery.
 
-## Why CLI First
+This was useful scaffolding.
 
-Android-first implementation would introduce:
+It is not the current OpenMLS relay proof.
 
-- Gradle/project setup complexity
-- Android lifecycle complexity
-- UI complexity
-- keystore integration
-- permission model concerns
-- emulator/device debugging
-- hardware-key integration complexity
+## Current validated lifecycle
 
-The CLI allows the relay, data model, and message lifecycle to be tested first.
+The current validated lifecycle is:
 
-## Phase 1 Commands
+1. Bob exports an OpenMLS KeyPackage artifact.
+2. Comms submits it to Cypher.
+3. Alice retrieves and writes it.
+4. Alice consumes it through the OpenMLS sidecar and creates a Welcome.
+5. Comms submits the Welcome to Cypher.
+6. Bob retrieves and writes it.
+7. Bob consumes it through the sidecar.
+8. Alice creates an application-message artifact.
+9. Comms submits it to Cypher.
+10. Bob retrieves, validates metadata, writes, and consumes it.
+11. The plaintext matches.
+12. Envelopes are acked only after sidecar consume succeeds.
 
-Potential CLI shape:
+## Why CLI/dev harness remains useful
 
-```text
-carbonstack-comms init
-carbonstack-comms claim-invite --server http://localhost:8080 --invite CODE --name alice
-carbonstack-comms register-device --label alice-cli-1
-carbonstack-comms list-devices --account ACCOUNT_ID
-carbonstack-comms send --to-device DEVICE_ID --message "hello"
-carbonstack-comms inbox
-carbonstack-comms ack --envelope ENVELOPE_ID
-Local Lifecycle
-1. Initialize Local State
+Android-first implementation would still introduce unnecessary complexity:
 
-Create local state directory.
+- Android lifecycle;
+- UI complexity;
+- keystore integration;
+- permission model concerns;
+- emulator/device debugging;
+- hardware-key integration complexity.
 
-Example:
+The CLI/dev harness path remains useful, but it must be updated around the OpenMLS sidecar relay model rather than the old stub-only lifecycle.
 
-.carbonstack-comms/
-  state.json
-  trust.json
-  messages.jsonl
-2. Claim Invite
+## Nonclaims
 
-Client sends invite code and display name to Cypher.
+This document does not describe a production messenger.
 
-Result:
+It does not describe production local vault security.
 
-account_id stored locally
-3. Register Device
+It does not describe a finished runtime send/inbox UX.
 
-Client creates local device identity material.
-
-Phase 1:
-
-stub identity key
-stub prekey bundle
-device_label
-
-Result:
-
-device_id stored locally
-4. Send Message
-
-Client flow:
-
-User enters recipient device ID.
-Client asks CryptoProvider to produce envelope payload.
-Client base64-encodes ciphertext/stub payload.
-Client submits envelope to Cypher.
-5. Retrieve Message
-
-Client flow:
-
-Client requests queued envelopes for its device_id.
-Client passes ciphertext to CryptoProvider.
-Client displays plaintext/stub output.
-Client acknowledges envelope.
-Mock CryptoProvider
-
-Phase 1 must not implement custom cryptography.
-
-The mock provider exists only to preserve architecture shape.
-
-Required interface concept:
-
-encrypt(recipient_device, plaintext) -> ciphertext
-decrypt(sender_device, ciphertext) -> plaintext
-
-The mock provider may initially base64-wrap or otherwise fake ciphertext for local testing, but this must be clearly marked insecure.
-
-Non-Goals
-no Android app
-no hardware-key integration
-no local vault hardening
-no final protocol
-no production encryption
-no group messaging
-no attachments
-no notification system
-Allowed Claim After Phase 1
-
-CarbonStackComms has a CLI lifecycle that can exercise CarbonStackCypher envelope delivery.
-
-Not Allowed Claim After Phase 1
-
-CarbonStackComms is secure for real-world private communication.
+It preserves historical Phase 1 planning and points to the current experimental backbone proof.

@@ -1,137 +1,72 @@
-﻿# Client Protocol Foundation
+﻿# CarbonStackComms Client Protocol Foundation
 
-CarbonStackComms MUST NOT invent cryptography casually.
+Status: current doctrine with implementation update
+Component: CarbonStackComms
+Maturity: experimental / pre-release
 
-The client protocol should be built around mature, reviewed foundations while preserving CarbonStack-specific trust UX, strict text policy, local vault behavior, and hostile-server assumptions.
+CarbonStackComms must not invent cryptography casually.
 
-## Phase 1 Target
+The client protocol must be built around mature, reviewed foundations while preserving CarbonStack-specific constraints:
 
-Phase 1 targets one-to-one asynchronous messaging.
+- strict text policy;
+- hostile-server assumptions;
+- loud trust changes;
+- local-state isolation;
+- minimal parser exposure;
+- visible membership/device changes.
 
-The preferred investigation path is a Signal-style protocol foundation:
+## Current implementation direction
 
-- asynchronous initial session setup
-- prekey-style delivery support
-- Double Ratchet-style message key evolution
-- forward secrecy
-- post-compromise recovery properties
-- replay resistance
-- visible key-change behavior
+Earlier Phase 1 planning investigated Signal-style one-to-one messaging.
 
-Candidate foundations include:
+The current mainline experimental proof uses an OpenMLS sidecar.
 
-- Signal Protocol / libsignal
-- X3DH or PQXDH-style initial agreement
-- Double Ratchet-style message encryption
+The current validated artifact is not a production protocol. It is a local development proof that OpenMLS artifacts can be generated, relayed through Cypher, consumed, and acknowledged after sidecar success.
 
-## Future Group Target
+Current validated artifact flow:
 
-Future group messaging SHOULD investigate MLS.
+- KeyPackage artifact;
+- Welcome artifact;
+- application-message artifact;
+- Cypher opaque envelope relay;
+- payload metadata validation;
+- consume-then-ack semantics.
 
-Group messaging should support:
+## Protocol boundary
 
-- group epochs
-- explicit membership changes
-- visible device additions
-- visible device removals
-- auditable membership history
-- server-hostile group state
-- revocation propagation
+CarbonStackComms should not treat the server as trusted.
 
-Group messaging MUST NOT allow the server to silently add members, replace keys, or rewrite group state without client-visible detection.
+The server must not be able to silently:
 
-## CarbonStack Envelope Layer
+- add members;
+- replace keys;
+- forge sender identity;
+- rewrite group history;
+- roll back group state without client-visible detection.
 
-CarbonStackComms should define a CarbonStack envelope above or around the chosen crypto foundation.
+The current implementation does not fully prove all of these hostile-server goals. They remain design requirements.
 
-The envelope should support:
+## Current OpenMLS relay content types
 
-- protocol version
-- sender device identifier
-- recipient or conversation identifier
-- message type
-- encrypted payload
-- replay protection metadata
-- trust-state metadata where appropriate
-- future group epoch metadata
-- future revocation metadata
+The current Cypher relay path uses:
 
-The envelope must avoid plaintext leakage where possible.
+    carbonstack.mls.keypackage.v0
+    carbonstack.mls.welcome.v0
+    carbonstack.mls.application-message.v0
 
-Metadata minimization is desired, but early versions may not provide strong metadata privacy.
+Protocol version:
 
-## Message Lifecycle
+    carbonstack-openmls-sidecar-v0
 
-A normal outbound message should follow this path:
+## Nonclaims
 
-1. user enters text
-2. text is validated
-3. text is normalized
-4. unsupported characters are rejected or visibly marked
-5. message object is formed
-6. message is encrypted locally
-7. encrypted envelope is submitted to CarbonStackCypher
-8. local send state is recorded
+This document does not claim:
 
-A normal inbound message should follow this path:
+- production E2EE readiness;
+- hostile-server completeness;
+- metadata privacy;
+- external audit or certification;
+- Android readiness;
+- stable public protocol status.
 
-1. encrypted envelope is received
-2. envelope structure is validated
-3. replay/order state is checked
-4. sender identity is checked
-5. message is decrypted locally
-6. plaintext is validated against policy
-7. message is stored in local vault
-8. UI renders through constrained text renderer
-
-## Trust Failure Behavior
-
-The client should fail closed or enter warning state when encountering:
-
-- unknown sender key
-- changed sender key
-- mismatched device identity
-- unexpected group epoch
-- replayed message
-- malformed envelope
-- unsupported protocol version
-- server-supplied identity mismatch
-- revoked device
-- stale or rolled-back state
-
-## Hardware-Key Role
-
-For earliest experimental MVP:
-
-- hardware keys are not mandatory
-
-For future high-assurance release:
-
-- hardware-key-backed enrollment SHOULD be required
-- hardware-key-backed recovery SHOULD be required
-- hardware-key approval SHOULD be required for high-risk trust actions
-
-High-risk trust actions include:
-
-- adding a device
-- replacing a device
-- recovering a device
-- revoking a device
-- exporting backup material
-- joining a high-assurance group
-
-## Non-Claims
-
-CarbonStackComms does not initially claim:
-
-- full metadata privacy
-- resistance to compromised endpoints
-- audited Signal-equivalent security
-- production-grade group messaging
-- protection from malicious recipient devices
-
-## Core Principle
-
-Use mature crypto foundations.
-
-Make CarbonStack-specific trust changes loud, testable, and hard for the server to fake.
+Use the main `carbonstack` runbook for current known-good validation.

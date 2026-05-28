@@ -1,123 +1,70 @@
-﻿# CarbonStackComms Experimental MLS Provider Slot
+﻿# CarbonStackComms MLS Area
 
-## Status
+This directory contains CarbonStackComms MLS-related development work.
 
-Classification: EXPERIMENTAL / PHASE 2C RESEARCH SLOT
+It is no longer only a future placeholder.
 
-This directory is reserved for future MLS feasibility work.
+The active promoted OpenMLS sidecar lives at:
 
-It does not currently contain a real MLS provider.
+    internal/protocol/mls/openmls-sidecar
 
-It does not currently import OpenMLS, mls-rs, libsignal, or any other cryptographic protocol dependency.
+The historical research reference remains under:
 
-## Purpose
+    internal/protocol/mls/research
 
-CarbonStack is moving toward an MLS-shaped, provider-neutral architecture.
+## Current status
 
-The current provider boundary lives in:
+Classification: experimental / development
 
-- `internal/protocol`
+The promoted OpenMLS sidecar is used by CarbonStackComms protocol tests and real-Cypher relay smoke proofs.
 
-This directory is the planned in-project location for future MLS feasibility work:
+It is not production-certified.
 
-- `internal/protocol/mls`
+It is not externally audited.
 
-The purpose of this marker is to keep future protocol work close to the provider boundary while making the experimental status explicit.
+It is not wired into polished runtime `send` / `inbox` UX.
 
-## Current Consensus
+It does not implement production secure vault storage.
 
-CarbonStack currently assumes:
+## Directory roles
 
-- every conversation is conceptually group-shaped
-- 1:1 conversations are two-member conversations
-- MLS is the preferred long-term architecture shape
-- Signal/libsignal remains a reference and fallback, not a mainline dependency
-- AGPL dependencies should be avoided in mainline unless explicitly accepted later
-- Rust is acceptable inside provider modules if it serves the project
-- no custom cryptography should be implemented
+### `openmls-sidecar`
 
-## What Belongs Here Later
+Maintained development sidecar.
 
-Future contents may include:
+Used for active contract tests and relay lifecycle proofs.
 
-- MLS feasibility notes specific to CarbonStackComms
-- local-only MLS spike code
-- experimental provider adapters
-- test fixtures for two-member conversations
-- serialization experiments
-- membership/epoch inspection experiments
-- provider-event mapping experiments
+### `research`
 
-## What Does Not Belong Here Yet
+Historical research area.
 
-Do not add yet:
+Preserves earlier OpenMLS feasibility work and known-good reference context.
 
-- OpenMLS dependency
-- mls-rs dependency
-- libsignal dependency
-- production provider code
-- Android code
-- CarbonStackOS code
-- hardware-key logic
-- production vault logic
-- custom cryptographic primitives
-- production security claims
+Do not treat research READMEs as current release surfaces unless a newer doc explicitly points to them.
 
-## First MLS Feasibility Target
+## Current architectural position
 
-The first MLS spike should prove only a local test flow:
+CarbonStackComms currently uses OpenMLS sidecar artifacts for the experimental relay proof:
 
-1. Alice provider identity exists.
-2. Bob provider identity exists.
-3. Alice and Bob have public setup material.
-4. Alice creates a two-member conversation.
-5. Bob joins or receives equivalent welcome/setup state.
-6. Alice protects a text message.
-7. Bob opens the text message.
-8. Membership can be inspected.
-9. Epoch or state version can be inspected.
-10. Provider state can be serialized/restored, if practical.
+- KeyPackage artifact;
+- Welcome artifact;
+- application-message artifact.
 
-## Provider Boundary Rules
+CarbonStackCypher relays these as opaque envelopes.
 
-MLS provider code may report provider facts, such as:
+Comms validates payload metadata before writing downloaded artifacts locally.
 
-- message opened
-- message protected
-- member added
-- member removed
-- stale epoch
-- malformed message
-- decrypt failed
-- state updated
+The sidecar consume step remains the cryptographic validity gate.
 
-CarbonStack application logic decides policy:
+## Nonclaims
 
-- whether to warn
-- whether to block
-- whether to mark a device changed
-- whether to require re-verification
-- whether to append trust history
-- whether to reject revoked devices
+This directory does not prove:
 
-## First Implementation Constraint
+- production E2EE;
+- hostile-server-complete safety;
+- metadata privacy;
+- production local storage security;
+- Android readiness;
+- external audit or certification.
 
-The first implementation should be local-only and test-only.
-
-It should not wire into normal `comms send` or `comms inbox` behavior until the provider boundary is proven.
-
-## Allowed Claims
-
-Allowed:
-
-- CarbonStackComms has a reserved experimental MLS provider slot.
-- CarbonStack is preparing for an MLS feasibility spike.
-- No MLS implementation has been integrated yet.
-
-Not allowed:
-
-- CarbonStackComms uses MLS.
-- CarbonStack has real encryption.
-- CarbonStack has production E2EE.
-- CarbonStack has selected a final MLS implementation.
-- CarbonStack has hostile-server proof.
+Use the main `carbonstack` runbook for the current system-level validation path.
