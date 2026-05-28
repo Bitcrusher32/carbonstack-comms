@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -67,8 +68,11 @@ func (tc *protocolTestCypherServer) handleSubmitEnvelope(w http.ResponseWriter, 
 		writeProtocolTestError(w, http.StatusBadRequest, "invalid_json", "invalid JSON")
 		return
 	}
-
-	if req.ContentType != relay.ContentTypeOpenMLSApplicationMessage {
+	switch req.ContentType {
+	case relay.ContentTypeOpenMLSKeyPackage,
+		relay.ContentTypeOpenMLSWelcome,
+		relay.ContentTypeOpenMLSApplicationMessage:
+	default:
 		writeProtocolTestError(w, http.StatusBadRequest, "unsupported_content_type", "unsupported content_type")
 		return
 	}
@@ -77,9 +81,12 @@ func (tc *protocolTestCypherServer) handleSubmitEnvelope(w http.ResponseWriter, 
 		writeProtocolTestError(w, http.StatusBadRequest, "unsupported_protocol_version", "unsupported protocol_version")
 		return
 	}
+	tc.mu.Lock()
+	envelopeID := fmt.Sprintf("test-envelope-%04d", len(tc.envelopes)+1)
+	tc.mu.Unlock()
 
 	env := protocolTestCypherEnvelope{
-		EnvelopeID:        "test-envelope-0001",
+		EnvelopeID:        envelopeID,
 		SenderDeviceID:    req.SenderDeviceID,
 		RecipientDeviceID: req.RecipientDeviceID,
 		ContentType:       req.ContentType,
