@@ -7,6 +7,21 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $RepoRoot
 
+function Invoke-NativeCommand {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FilePath,
+
+        [Parameter(ValueFromRemainingArguments = $true)]
+        [string[]]$Arguments
+    )
+
+    & $FilePath @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Command failed with exit code ${LASTEXITCODE}: $FilePath $($Arguments -join ' ')"
+    }
+}
+
 Write-Host "CarbonStackComms OpenMLS real-Cypher relay smoke harness"
 Write-Host ""
 Write-Host "Status:"
@@ -37,24 +52,24 @@ if ($StaleCypher) {
 }
 
 Write-Host "Running targeted real-Cypher relay lifecycle smoke test..."
-go test -p 1 ./internal/protocol -run "TestOpenMLSSidecarFullLifecycleRelayThroughRealCypherServer" -count=1 -timeout 240s
+Invoke-NativeCommand go test -p 1 ./internal/protocol -run "TestOpenMLSSidecarFullLifecycleRelayThroughRealCypherServer" -count=1 -timeout 240s
 
 Write-Host ""
 Write-Host "Running generated Rust/OpenMLS artifact guard..."
-powershell -ExecutionPolicy Bypass -File .\scripts\check-no-rust-artifacts.ps1
+Invoke-NativeCommand powershell -ExecutionPolicy Bypass -File .\scripts\check-no-rust-artifacts.ps1
 
 if ($Full) {
     Write-Host ""
     Write-Host "Running broader protocol/relay validation because -Full was provided..."
 
-    go test -p 1 ./internal/protocol -run "TestOpenMLSSidecarFullLifecycleRelayThroughCypherEnvelope|TestOpenMLSSidecarFullLifecycleRelayThroughRealCypherServer" -count=1 -timeout 300s
-    go test -p 1 ./internal/relay
-    go test -p 1 ./internal/protocol -count=1 -timeout 360s
-    go test -p 1 ./... -count=1 -timeout 360s
+    Invoke-NativeCommand go test -p 1 ./internal/protocol -run "TestOpenMLSSidecarFullLifecycleRelayThroughCypherEnvelope|TestOpenMLSSidecarFullLifecycleRelayThroughRealCypherServer" -count=1 -timeout 300s
+    Invoke-NativeCommand go test -p 1 ./internal/relay
+    Invoke-NativeCommand go test -p 1 ./internal/protocol -count=1 -timeout 360s
+    Invoke-NativeCommand go test -p 1 ./... -count=1 -timeout 360s
 
     Write-Host ""
     Write-Host "Running generated Rust/OpenMLS artifact guard again after full validation..."
-    powershell -ExecutionPolicy Bypass -File .\scripts\check-no-rust-artifacts.ps1
+    Invoke-NativeCommand powershell -ExecutionPolicy Bypass -File .\scripts\check-no-rust-artifacts.ps1
 }
 
 Write-Host ""
@@ -63,3 +78,4 @@ Write-Host ""
 Write-Host "Reminder:"
 Write-Host "  This proves an experimental local dev/test relay lifecycle."
 Write-Host "  It does not prove production readiness, hostile-server safety, metadata minimization, Android readiness, or external audit."
+

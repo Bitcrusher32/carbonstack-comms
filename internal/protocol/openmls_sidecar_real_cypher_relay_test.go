@@ -146,6 +146,18 @@ func TestOpenMLSSidecarFullLifecycleRelayThroughRealCypherServer(t *testing.T) {
 	}
 	assertNoSecretMaterialInStdout(t, addMemberOutput)
 
+	if _, err := cypherClient.AckEnvelope(keyPackageEnvelope.EnvelopeID, aliceCypherDevice.DeviceID); err != nil {
+		t.Fatalf("ack keypackage envelope after successful conversation-add-member failed: %v", err)
+	}
+
+	aliceInboxAfterAck, err := cypherClient.Inbox(aliceCypherDevice.DeviceID)
+	if err != nil {
+		t.Fatalf("alice real Cypher inbox after keypackage ack failed: %v", err)
+	}
+	if len(aliceInboxAfterAck.Envelopes) != 0 {
+		t.Fatalf("expected Alice inbox to be empty after keypackage ack, got %d envelopes", len(aliceInboxAfterAck.Envelopes))
+	}
+
 	welcomeArtifactPath := filepath.Join(openMLSSidecarDir, addMemberEnvelope.Data.WelcomeArtifactPathHint)
 
 	if _, err := relay.SubmitOpenMLSArtifactEnvelope(
@@ -199,6 +211,18 @@ func TestOpenMLSSidecarFullLifecycleRelayThroughRealCypherServer(t *testing.T) {
 	}
 	assertNoSecretMaterialInStdout(t, joinOutput)
 
+	if _, err := cypherClient.AckEnvelope(welcomeEnvelope.EnvelopeID, bobCypherDevice.DeviceID); err != nil {
+		t.Fatalf("ack welcome envelope after successful conversation-join failed: %v", err)
+	}
+
+	bobInboxAfterWelcomeAck, err := cypherClient.Inbox(bobCypherDevice.DeviceID)
+	if err != nil {
+		t.Fatalf("bob real Cypher inbox after welcome ack failed: %v", err)
+	}
+	if len(bobInboxAfterWelcomeAck.Envelopes) != 0 {
+		t.Fatalf("expected Bob inbox to be empty after welcome ack, got %d envelopes", len(bobInboxAfterWelcomeAck.Envelopes))
+	}
+
 	messageLabel := "real-cypher-full-lifecycle-message-0001"
 	plaintext := "hello bob through real cypher server lifecycle"
 
@@ -227,8 +251,8 @@ func TestOpenMLSSidecarFullLifecycleRelayThroughRealCypherServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bob real Cypher inbox for application message failed: %v", err)
 	}
-	if len(bobMessageInbox.Envelopes) != 2 {
-		t.Fatalf("expected 2 queued envelopes for Bob before ack support, got %d", len(bobMessageInbox.Envelopes))
+	if len(bobMessageInbox.Envelopes) != 1 {
+		t.Fatalf("expected 1 queued application-message envelope for Bob after welcome ack, got %d", len(bobMessageInbox.Envelopes))
 	}
 
 	var messageEnvelopeFound bool
@@ -252,4 +276,16 @@ func TestOpenMLSSidecarFullLifecycleRelayThroughRealCypherServer(t *testing.T) {
 	openEnvelope, openOutput := openOpenMLSSidecarMessage(t, messageLabel, downloadedMessagePath)
 	assertMessageOpenSuccess(t, openEnvelope, messageLabel, plaintext, addMemberEnvelope.Data.GroupIDRef)
 	assertNoSecretMaterialInStdout(t, openOutput)
+
+	if _, err := cypherClient.AckEnvelope(messageEnvelope.EnvelopeID, bobCypherDevice.DeviceID); err != nil {
+		t.Fatalf("ack application-message envelope after successful message-open failed: %v", err)
+	}
+
+	bobInboxAfterMessageAck, err := cypherClient.Inbox(bobCypherDevice.DeviceID)
+	if err != nil {
+		t.Fatalf("bob real Cypher inbox after application-message ack failed: %v", err)
+	}
+	if len(bobInboxAfterMessageAck.Envelopes) != 0 {
+		t.Fatalf("expected Bob inbox to be empty after application-message ack, got %d envelopes", len(bobInboxAfterMessageAck.Envelopes))
+	}
 }
