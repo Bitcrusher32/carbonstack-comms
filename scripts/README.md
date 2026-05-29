@@ -12,7 +12,7 @@ Run:
 
     powershell -ExecutionPolicy Bypass -File .\scripts\smoke-openmls-real-cypher-relay.ps1
 
-This is the current Option C validation path.
+This is the current OpenMLS backbone self-test path.
 
 It proves the local OpenMLS sidecar + real Cypher server relay lifecycle:
 
@@ -81,4 +81,15 @@ This matters on Windows because stale `cypher.exe` processes can hold temp SQLit
 
 They are not the current OpenMLS + Cypher backbone proof.
 
-Use the real-Cypher OpenMLS smoke harness for the current known-good backbone validation path.
+Use the OpenMLS backbone self-test path for the current known-good backbone validation.
+## Future self-test wrapper
+
+The public-facing self-test name should be:
+
+    OpenMLS backbone self-test harness
+
+A later rung may add:
+
+    scripts/self-test-openmls-backbone.ps1
+
+That wrapper should call the existing real-Cypher smoke harness instead of duplicating the proof logic.

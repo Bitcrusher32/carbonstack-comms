@@ -21,3 +21,7 @@ internal/protocol/mls/research/openmls-sidecar/.carbonstack-openmls-sidecar-stat
 # CarbonStack OpenMLS sidecar generated local state/build output
 internal/protocol/mls/**/.carbonstack-openmls-sidecar-state/
 internal/protocol/mls/**/target/
+
+# Local Go temp/cache directories for antivirus-safe test runs
+.go-cache/
+.go-tmp/
