@@ -74,11 +74,11 @@ Generated signer/provider state must not be committed.
 
 Run the current real-server OpenMLS relay smoke harness:
 
-    powershell -ExecutionPolicy Bypass -File .\scripts\smoke-openmls-real-cypher-relay.ps1
+    powershell -ExecutionPolicy Bypass -File .\scripts\self-test-openmls-backbone.ps1
 
 Run broader validation:
 
-    powershell -ExecutionPolicy Bypass -File .\scripts\smoke-openmls-real-cypher-relay.ps1 -Full
+    powershell -ExecutionPolicy Bypass -File .\scripts\self-test-openmls-backbone.ps1 -Full
     powershell -ExecutionPolicy Bypass -File .\scripts\check-no-rust-artifacts.ps1
 
 ## Main runbook
@@ -99,3 +99,12 @@ CarbonStackComms does not currently provide:
 - hostile-server-complete rollback/replay defense.
 
 This repo is an implementation and development surface. The public release framing belongs in the main `carbonstack` repo.
+## Lower-level smoke harness
+
+The public self-test entrypoint is:
+
+    powershell -ExecutionPolicy Bypass -File .\scripts\self-test-openmls-backbone.ps1
+
+The lower-level implementation harness remains available for debugging:
+
+    powershell -ExecutionPolicy Bypass -File .\scripts\smoke-openmls-real-cypher-relay.ps1

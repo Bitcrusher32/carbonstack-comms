@@ -30,7 +30,7 @@ Write-Host "  Not production E2EE."
 Write-Host "  Not certified secure."
 Write-Host "  Not polished Comms runtime UX."
 Write-Host ""
-Write-Host "This harness runs the current known-good Option C backbone proof:"
+Write-Host "This harness runs the current known-good OpenMLS backbone proof:"
 Write-Host "  TestOpenMLSSidecarFullLifecycleRelayThroughRealCypherServer"
 Write-Host ""
 Write-Host "It will:"
@@ -80,5 +80,6 @@ Write-Host ""
 Write-Host "Reminder:"
 Write-Host "  This proves the current experimental local dev/test backbone lifecycle."
 Write-Host "  It does not prove production readiness, hostile-server safety, metadata privacy, Android readiness, or external audit."
+
 
 
