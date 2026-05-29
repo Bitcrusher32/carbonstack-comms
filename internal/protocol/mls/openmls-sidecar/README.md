@@ -97,7 +97,7 @@ From this crate:
 From the `carbonstack-comms` repo root:
 
     go test -p 1 ./internal/protocol -count=1
-    powershell -ExecutionPolicy Bypass -File .\scripts\smoke-openmls-real-cypher-relay.ps1
+    powershell -ExecutionPolicy Bypass -File .\scripts\self-test-openmls-backbone.ps1
     powershell -ExecutionPolicy Bypass -File .\scripts\check-no-rust-artifacts.ps1
 
 ## Boundary
@@ -107,3 +107,4 @@ This crate is a development sidecar.
 It proves current OpenMLS artifact lifecycle behavior for the CarbonStack experimental backbone.
 
 It does not prove production readiness, Android readiness, hostile-server completeness, metadata privacy, or external certification.
+

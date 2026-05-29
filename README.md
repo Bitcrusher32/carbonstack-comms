@@ -72,7 +72,7 @@ Generated signer/provider state must not be committed.
 
 ## Smoke harness
 
-Run the current real-server OpenMLS relay smoke harness:
+Run the current OpenMLS backbone self-test:
 
     powershell -ExecutionPolicy Bypass -File .\scripts\self-test-openmls-backbone.ps1
 
@@ -108,3 +108,4 @@ The public self-test entrypoint is:
 The lower-level implementation harness remains available for debugging:
 
     powershell -ExecutionPolicy Bypass -File .\scripts\smoke-openmls-real-cypher-relay.ps1
+
