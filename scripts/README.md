@@ -10,9 +10,13 @@ They exist to prove the current CarbonStack experimental backbone path from the 
 
 Run:
 
-    powershell -ExecutionPolicy Bypass -File .\scripts\smoke-openmls-real-cypher-relay.ps1
+    powershell -ExecutionPolicy Bypass -File .\scripts\self-test-openmls-backbone.ps1
 
 This is the current OpenMLS backbone self-test path.
+
+The wrapper delegates to the lower-level real-Cypher smoke harness:
+
+    powershell -ExecutionPolicy Bypass -File .\scripts\smoke-openmls-real-cypher-relay.ps1
 
 It proves the local OpenMLS sidecar + real Cypher server relay lifecycle:
 
@@ -45,9 +49,13 @@ It does not prove external audit or certification.
 
 Run:
 
-    powershell -ExecutionPolicy Bypass -File .\scripts\smoke-openmls-real-cypher-relay.ps1 -Full
+    powershell -ExecutionPolicy Bypass -File .\scripts\self-test-openmls-backbone.ps1 -Full
 
-The `-Full` path runs the targeted real-server proof, relay tests, protocol tests, broader Go tests, and generated Rust/OpenMLS artifact guard.
+The `-Full` path delegates to the lower-level smoke harness and runs the targeted real-server proof, relay tests, protocol tests, broader Go tests, and generated Rust/OpenMLS artifact guard.
+
+The lower-level command remains available:
+
+    powershell -ExecutionPolicy Bypass -File .\scripts\smoke-openmls-real-cypher-relay.ps1 -Full
 
 Use `-Full` before pushing changes that affect relay, protocol, sidecar, client, or script behavior.
 
@@ -82,14 +90,15 @@ This matters on Windows because stale `cypher.exe` processes can hold temp SQLit
 They are not the current OpenMLS + Cypher backbone proof.
 
 Use the OpenMLS backbone self-test path for the current known-good backbone validation.
-## Future self-test wrapper
+## Self-test wrapper
 
-The public-facing self-test name should be:
+The public-facing self-test name is:
 
     OpenMLS backbone self-test harness
 
-A later rung may add:
+The wrapper is:
 
     scripts/self-test-openmls-backbone.ps1
 
-That wrapper should call the existing real-Cypher smoke harness instead of duplicating the proof logic.
+It calls the existing real-Cypher smoke harness instead of duplicating the proof logic.
+
