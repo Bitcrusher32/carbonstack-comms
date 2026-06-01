@@ -112,3 +112,9 @@ The lower-level implementation harness remains available for debugging:
 
     powershell -ExecutionPolicy Bypass -File .\scripts\smoke-openmls-real-cypher-relay.ps1
 
+
+---
+
+License: MIT.
+See the repository's LICENSE file for more information.
+
