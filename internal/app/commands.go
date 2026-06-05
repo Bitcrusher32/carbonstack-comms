@@ -1,9 +1,13 @@
 package app
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"git.bitcrusher32.win/bitcrusher32/carbonstack-comms/internal/relay"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -48,6 +52,8 @@ func Run(args []string) error {
 		return cmdInbox(args[1:])
 	case "ack":
 		return cmdAck(args[1:])
+	case "openmls-send-dev":
+		return cmdOpenMLSSendDev(args[1:])
 	default:
 		return fmt.Errorf("unknown command: %s", args[0])
 	}
@@ -71,6 +77,7 @@ func usage() {
 	fmt.Println("  send")
 	fmt.Println("  inbox")
 	fmt.Println("  ack")
+	fmt.Println("  openmls-send-dev")
 }
 
 func cmdInit(args []string) error {
@@ -401,6 +408,187 @@ func cmdRevokeDevice(args []string) error {
 	fmt.Printf("device_id: %s\n", record.DeviceID)
 	fmt.Printf("trust_state: %s\n", record.TrustState)
 	return nil
+}
+
+const defaultOpenMLSSidecarDir = "internal/protocol/mls/openmls-sidecar"
+
+type openMLSMessageProtectResult struct {
+	DeviceLabel             string
+	ConversationLabel       string
+	MessageLabel            string
+	MessageArtifactPathHint string
+}
+
+type openMLSSidecarErrorEnvelope struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+type openMLSSidecarProtectEnvelope struct {
+	OK      bool                         `json:"ok"`
+	Command string                       `json:"command"`
+	Data    openMLSSidecarProtectData    `json:"data"`
+	Error   *openMLSSidecarErrorEnvelope `json:"error"`
+}
+
+type openMLSSidecarProtectData struct {
+	DeviceLabel             string `json:"device_label"`
+	ConversationLabel       string `json:"conversation_label"`
+	MessageLabel            string `json:"message_label"`
+	MessageArtifactPathHint string `json:"message_artifact_path_hint"`
+}
+
+var runOpenMLSMessageProtectForCommand = runOpenMLSMessageProtect
+
+var submitOpenMLSArtifactEnvelopeForCommand = relay.SubmitOpenMLSArtifactEnvelope
+
+func cmdOpenMLSSendDev(args []string) error {
+	fs := flag.NewFlagSet("openmls-send-dev", flag.ExitOnError)
+	statePath := fs.String("state", state.DefaultStatePath, "local state file path")
+	toDevice := fs.String("to-device", "", "recipient Cypher device ID")
+	message := fs.String("message", "", "plaintext message text")
+	strict := fs.Bool("strict", false, "block sending to unknown, unverified, or changed devices")
+	sidecarDir := fs.String("sidecar-dir", defaultOpenMLSSidecarDir, "OpenMLS sidecar directory")
+	sidecarDeviceLabel := fs.String("sidecar-device-label", "", "sender OpenMLS sidecar device label")
+	conversationLabel := fs.String("conversation", "", "OpenMLS sidecar conversation label")
+	messageLabel := fs.String("message-label", "", "OpenMLS sidecar message label; sidecar default is used when omitted")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	if *toDevice == "" || *message == "" || *sidecarDeviceLabel == "" || *conversationLabel == "" {
+		return errors.New("--to-device, --message, --sidecar-device-label, and --conversation are required")
+	}
+
+	s, err := state.RequireReadyDevice(*statePath)
+	if err != nil {
+		return err
+	}
+
+	paths := trust.PathsForStatePath(*statePath)
+	decision, err := trust.EvaluateSend(paths, *toDevice, *strict)
+	if err != nil {
+		return err
+	}
+
+	if decision.Warning != "" {
+		fmt.Printf("WARNING: %s\n", decision.Warning)
+	}
+	if !*strict {
+		fmt.Println("WARNING: openmls-send-dev is running in dev trust mode; use --strict to block unknown or unverified recipients")
+	}
+
+	if !decision.Allowed {
+		return fmt.Errorf("openmls-send-dev blocked by trust policy: recipient trust_state=%s", decision.TrustState)
+	}
+
+	protect, err := runOpenMLSMessageProtectForCommand(*sidecarDir, *sidecarDeviceLabel, *conversationLabel, *messageLabel, *message)
+	if err != nil {
+		return err
+	}
+
+	artifactPath := protect.MessageArtifactPathHint
+	if artifactPath == "" {
+		return errors.New("OpenMLS sidecar message-protect did not return message_artifact_path_hint")
+	}
+	if !filepath.IsAbs(artifactPath) {
+		artifactPath = filepath.Join(*sidecarDir, artifactPath)
+	}
+
+	c := client.New(s.ServerURL)
+	resp, err := submitOpenMLSArtifactEnvelopeForCommand(
+		c,
+		s.DeviceID,
+		*toDevice,
+		relay.ArtifactKindApplicationMessage,
+		artifactPath,
+		relay.DefaultClientCreatedAt(),
+	)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("openmls dev envelope sent")
+	fmt.Printf("command: openmls-send-dev\n")
+	fmt.Printf("status: sent\n")
+	fmt.Printf("sender_device_id: %s\n", s.DeviceID)
+	fmt.Printf("recipient_device_id: %s\n", *toDevice)
+	fmt.Printf("content_type: %s\n", relay.ContentTypeOpenMLSApplicationMessage)
+	fmt.Printf("protocol_version: %s\n", relay.ProtocolVersionOpenMLSSidecar)
+	fmt.Printf("envelope_id: %s\n", resp.EnvelopeID)
+	fmt.Printf("delivery_state: %s\n", resp.DeliveryState)
+	fmt.Printf("server_received_at: %s\n", resp.ServerReceivedAt)
+	fmt.Printf("payload_sha256: %s\n", resp.PayloadSHA256)
+	fmt.Printf("payload_size_bytes: %d\n", resp.PayloadSizeBytes)
+	fmt.Printf("sidecar_device_label: %s\n", protect.DeviceLabel)
+	fmt.Printf("sidecar_conversation_label: %s\n", protect.ConversationLabel)
+	fmt.Printf("sidecar_message_label: %s\n", protect.MessageLabel)
+	fmt.Println("warning: dev/pre-alpha OpenMLS runtime path; not production messaging UX")
+	return nil
+}
+
+func runOpenMLSMessageProtect(sidecarDir string, deviceLabel string, conversationLabel string, messageLabel string, plaintext string) (openMLSMessageProtectResult, error) {
+	if strings.TrimSpace(sidecarDir) == "" {
+		return openMLSMessageProtectResult{}, errors.New("sidecar directory is required")
+	}
+
+	cmdArgs := []string{
+		"run",
+		"--quiet",
+		"--",
+		"message-protect",
+		"--device-label", deviceLabel,
+		"--conversation-label", conversationLabel,
+		"--plaintext", plaintext,
+	}
+	if strings.TrimSpace(messageLabel) != "" {
+		cmdArgs = append(cmdArgs, "--message-label", messageLabel)
+	}
+
+	cmd := exec.Command("cargo", cmdArgs...)
+	cmd.Dir = sidecarDir
+
+	output, err := cmd.Output()
+	if err != nil {
+		if len(output) > 0 {
+			parsed, parseErr := parseOpenMLSProtectEnvelope(output)
+			if parseErr == nil && parsed.Error != nil {
+				return openMLSMessageProtectResult{}, fmt.Errorf("OpenMLS sidecar message-protect failed: %s: %s", parsed.Error.Code, parsed.Error.Message)
+			}
+		}
+		return openMLSMessageProtectResult{}, fmt.Errorf("run OpenMLS sidecar message-protect: %w", err)
+	}
+
+	parsed, err := parseOpenMLSProtectEnvelope(output)
+	if err != nil {
+		return openMLSMessageProtectResult{}, err
+	}
+
+	if !parsed.OK {
+		if parsed.Error != nil {
+			return openMLSMessageProtectResult{}, fmt.Errorf("OpenMLS sidecar message-protect failed: %s: %s", parsed.Error.Code, parsed.Error.Message)
+		}
+		return openMLSMessageProtectResult{}, errors.New("OpenMLS sidecar message-protect returned ok=false")
+	}
+
+	if parsed.Data.MessageArtifactPathHint == "" {
+		return openMLSMessageProtectResult{}, errors.New("OpenMLS sidecar message-protect returned empty message_artifact_path_hint")
+	}
+
+	return openMLSMessageProtectResult{
+		DeviceLabel:             parsed.Data.DeviceLabel,
+		ConversationLabel:       parsed.Data.ConversationLabel,
+		MessageLabel:            parsed.Data.MessageLabel,
+		MessageArtifactPathHint: parsed.Data.MessageArtifactPathHint,
+	}, nil
+}
+
+func parseOpenMLSProtectEnvelope(output []byte) (openMLSSidecarProtectEnvelope, error) {
+	var parsed openMLSSidecarProtectEnvelope
+	if err := json.Unmarshal(output, &parsed); err != nil {
+		return parsed, fmt.Errorf("decode OpenMLS sidecar message-protect envelope: %w", err)
+	}
+	return parsed, nil
 }
 
 func cmdSend(args []string) error {

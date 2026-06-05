@@ -59,6 +59,32 @@ CarbonStackComms is intended to preserve these constraints:
 - strict parser minimization;
 - no server-trusted identity changes.
 
+## Dev-only OpenMLS runtime command
+
+The first explicit runtime OpenMLS command is:
+
+    go run ./cmd/comms openmls-send-dev
+
+This command is dev-only and pre-alpha. It does not replace the existing stub-era `send` command yet.
+
+Current purpose:
+
+    call the OpenMLS sidecar `message-protect` command
+    submit the resulting application-message artifact through the Cypher relay helper
+    preserve dev-mode trust behavior by default, with optional `--strict`
+
+Minimal shape:
+
+    go run ./cmd/comms openmls-send-dev \
+      --to-device <recipient-cypher-device-id> \
+      --sidecar-device-label <sender-sidecar-device-label> \
+      --conversation <sidecar-conversation-label> \
+      --message <plaintext> \
+      [--message-label <label>] \
+      [--strict]
+
+This is not mature messaging UX, not local-backbone, and not a production security claim.
+
 ## OpenMLS sidecar
 
 The promoted OpenMLS sidecar lives at:
