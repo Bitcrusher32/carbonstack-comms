@@ -212,3 +212,21 @@ Boundary:
     Comms state/trust files are not mutated by these wrappers
     existing send/inbox remain stub-era
     dev-runtime-openmls remains the current manual smoke-profile proof
+## Wrapper-based dev runtime OpenMLS smoke proof
+
+This optional smoke script validates the current dev-only bootstrap wrapper surface before the existing runtime send/open path:
+
+    scripts/dev-openmls-runtime-smoke-wrappers.sh
+
+Proof shape:
+
+    openmls-*-dev bootstrap wrappers -> openmls-send-dev -> Cypher -> openmls-inbox-dev --ack
+
+Boundary:
+
+    This is a dev/pre-alpha wrapper smoke proof.
+    It is not local-backbone.
+    It is not mature messaging UX.
+    It is not production E2EE.
+    It does not replace the direct-sidecar smoke script yet.
+    The manual dev-runtime-openmls runner profile still wraps scripts/dev-openmls-runtime-smoke.sh.
