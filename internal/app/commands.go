@@ -62,6 +62,10 @@ func Run(args []string) error {
 		return cmdOpenMLSConversationCreateDev(args[1:])
 	case "openmls-conversation-load-check-dev":
 		return cmdOpenMLSConversationLoadCheckDev(args[1:])
+	case "openmls-conversation-add-member-dev":
+		return cmdOpenMLSConversationAddMemberDev(args[1:])
+	case "openmls-conversation-join-dev":
+		return cmdOpenMLSConversationJoinDev(args[1:])
 	default:
 		return fmt.Errorf("unknown command: %s", args[0])
 	}
@@ -92,6 +96,8 @@ func usage() {
 	fmt.Println("  openmls-bundle-export-dev")
 	fmt.Println("  openmls-conversation-create-dev")
 	fmt.Println("  openmls-conversation-load-check-dev")
+	fmt.Println("  openmls-conversation-add-member-dev")
+	fmt.Println("  openmls-conversation-join-dev")
 }
 
 func cmdInit(args []string) error {

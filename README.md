@@ -193,6 +193,8 @@ They are not production identity UX, not Relay Space join UX, not local-backbone
     openmls-bundle-export-dev
     openmls-conversation-create-dev
     openmls-conversation-load-check-dev
+    openmls-conversation-add-member-dev
+    openmls-conversation-join-dev
 
 Current identity bootstrap examples:
 
@@ -201,6 +203,8 @@ Current identity bootstrap examples:
     go run ./cmd/comms openmls-bundle-export-dev --sidecar-device-label carbonstack-dev-alice --write-artifact
     go run ./cmd/comms openmls-conversation-create-dev --sidecar-device-label carbonstack-dev-alice --conversation carbonstack-dev-conversation
     go run ./cmd/comms openmls-conversation-load-check-dev --sidecar-device-label carbonstack-dev-alice --conversation carbonstack-dev-conversation
+    go run ./cmd/comms openmls-conversation-add-member-dev --sidecar-device-label carbonstack-dev-alice --conversation carbonstack-dev-conversation --member-keypackage <path-to-member-keypackage>
+    go run ./cmd/comms openmls-conversation-join-dev --sidecar-device-label carbonstack-dev-bob --conversation carbonstack-dev-conversation --welcome <path-to-welcome>
 
 Boundary:
 

@@ -236,6 +236,142 @@ func cmdOpenMLSConversationLoadCheckDev(args []string) error {
 	return nil
 }
 
+func cmdOpenMLSConversationAddMemberDev(args []string) error {
+	fs := flag.NewFlagSet("openmls-conversation-add-member-dev", flag.ExitOnError)
+	sidecarDir := fs.String("sidecar-dir", defaultOpenMLSSidecarDir, "OpenMLS sidecar directory")
+	sidecarDeviceLabel := fs.String("sidecar-device-label", "", "OpenMLS sidecar device label")
+	conversationLabel := fs.String("conversation", "", "OpenMLS sidecar conversation label")
+	memberKeyPackage := fs.String("member-keypackage", "", "OpenMLS member KeyPackage artifact path")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	if *sidecarDeviceLabel == "" || *conversationLabel == "" || *memberKeyPackage == "" {
+		return errors.New("--sidecar-device-label, --conversation, and --member-keypackage are required")
+	}
+
+	memberKeyPackageAbs, err := filepath.Abs(*memberKeyPackage)
+	if err != nil {
+		return fmt.Errorf("resolve --member-keypackage: %w", err)
+	}
+
+	envelope, err := runOpenMLSBootstrapSidecarForCommand(
+		*sidecarDir,
+		"conversation-add-member",
+		"--device-label", *sidecarDeviceLabel,
+		"--conversation-label", *conversationLabel,
+		"--member-keypackage", memberKeyPackageAbs,
+	)
+	if err != nil {
+		return err
+	}
+
+	deviceLabel := bootstrapStringField(envelope.Data, "device_label")
+	if deviceLabel == "" {
+		deviceLabel = *sidecarDeviceLabel
+	}
+	conversation := bootstrapStringField(envelope.Data, "conversation_label")
+	if conversation == "" {
+		conversation = *conversationLabel
+	}
+
+	welcomeHint := bootstrapStringField(envelope.Data, "welcome_artifact_path_hint")
+	welcomePath := bootstrapPathFromHint(*sidecarDir, welcomeHint)
+	welcomeManifestHint := bootstrapStringField(envelope.Data, "welcome_manifest_path_hint")
+	welcomeManifestPath := bootstrapPathFromHint(*sidecarDir, welcomeManifestHint)
+
+	fmt.Println("openmls dev bootstrap")
+	fmt.Println("command: openmls-conversation-add-member-dev")
+	fmt.Println("status: welcome_created")
+	fmt.Printf("sidecar_command: %s\n", envelope.Command)
+	fmt.Printf("sidecar_device_label: %s\n", deviceLabel)
+	fmt.Printf("sidecar_conversation_label: %s\n", conversation)
+	bootstrapPrintOptionalString("member_keypackage_path_hint", envelope.Data)
+	if welcomeHint != "" {
+		fmt.Printf("welcome_artifact_path_hint: %s\n", welcomeHint)
+	}
+	if welcomePath != "" {
+		fmt.Printf("welcome_artifact_path: %s\n", welcomePath)
+	}
+	if welcomeManifestHint != "" {
+		fmt.Printf("welcome_manifest_path_hint: %s\n", welcomeManifestHint)
+	}
+	if welcomeManifestPath != "" {
+		fmt.Printf("welcome_manifest_path: %s\n", welcomeManifestPath)
+	}
+	bootstrapPrintOptionalString("welcome_artifact_sha256", envelope.Data)
+	bootstrapPrintOptionalNumber("welcome_artifact_size_bytes", envelope.Data)
+	bootstrapPrintOptionalBool("member_added", envelope.Data)
+	bootstrapPrintOptionalBool("welcome_artifact_written", envelope.Data)
+	bootstrapPrintOptionalBool("group_reloadable", envelope.Data)
+	bootstrapPrintOptionalNumber("member_count_before", envelope.Data)
+	bootstrapPrintOptionalNumber("member_count_after", envelope.Data)
+	bootstrapPrintOptionalString("epoch_before", envelope.Data)
+	bootstrapPrintOptionalString("epoch_after", envelope.Data)
+	fmt.Println("warning: dev/pre-alpha OpenMLS bootstrap path; not production membership UX")
+
+	return nil
+}
+
+func cmdOpenMLSConversationJoinDev(args []string) error {
+	fs := flag.NewFlagSet("openmls-conversation-join-dev", flag.ExitOnError)
+	sidecarDir := fs.String("sidecar-dir", defaultOpenMLSSidecarDir, "OpenMLS sidecar directory")
+	sidecarDeviceLabel := fs.String("sidecar-device-label", "", "OpenMLS sidecar device label")
+	conversationLabel := fs.String("conversation", "", "OpenMLS sidecar conversation label")
+	welcome := fs.String("welcome", "", "OpenMLS Welcome artifact path")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	if *sidecarDeviceLabel == "" || *conversationLabel == "" || *welcome == "" {
+		return errors.New("--sidecar-device-label, --conversation, and --welcome are required")
+	}
+
+	welcomeAbs, err := filepath.Abs(*welcome)
+	if err != nil {
+		return fmt.Errorf("resolve --welcome: %w", err)
+	}
+
+	envelope, err := runOpenMLSBootstrapSidecarForCommand(
+		*sidecarDir,
+		"conversation-join",
+		"--device-label", *sidecarDeviceLabel,
+		"--conversation-label", *conversationLabel,
+		"--welcome", welcomeAbs,
+	)
+	if err != nil {
+		return err
+	}
+
+	deviceLabel := bootstrapStringField(envelope.Data, "device_label")
+	if deviceLabel == "" {
+		deviceLabel = *sidecarDeviceLabel
+	}
+	conversation := bootstrapStringField(envelope.Data, "conversation_label")
+	if conversation == "" {
+		conversation = *conversationLabel
+	}
+
+	fmt.Println("openmls dev bootstrap")
+	fmt.Println("command: openmls-conversation-join-dev")
+	fmt.Println("status: joined")
+	fmt.Printf("sidecar_command: %s\n", envelope.Command)
+	fmt.Printf("sidecar_device_label: %s\n", deviceLabel)
+	fmt.Printf("sidecar_conversation_label: %s\n", conversation)
+	bootstrapPrintOptionalString("welcome_artifact_path_hint", envelope.Data)
+	bootstrapPrintOptionalBool("joined", envelope.Data)
+	bootstrapPrintOptionalBool("group_reloadable", envelope.Data)
+	bootstrapPrintOptionalNumber("member_count", envelope.Data)
+	bootstrapPrintOptionalString("epoch", envelope.Data)
+	bootstrapPrintOptionalString("join_summary_path_hint", envelope.Data)
+	bootstrapPrintOptionalString("conversation_state_path_hint", envelope.Data)
+	bootstrapPrintOptionalString("conversation_summary_path_hint", envelope.Data)
+	bootstrapPrintOptionalString("provider_storage_path_hint", envelope.Data)
+	fmt.Println("warning: dev/pre-alpha OpenMLS bootstrap path; not production membership UX")
+
+	return nil
+}
+
 func runOpenMLSBootstrapSidecar(sidecarDir string, sidecarCommand string, args ...string) (openMLSSidecarBootstrapEnvelope, error) {
 	cmdArgs := append([]string{"run", "--quiet", "--", sidecarCommand}, args...)
 	cmd := exec.Command("cargo", cmdArgs...)
@@ -311,4 +447,35 @@ func bootstrapPathFromHint(sidecarDir string, hint string) string {
 		return filepath.Clean(hint)
 	}
 	return filepath.Clean(filepath.Join(sidecarDir, hint))
+}
+
+func bootstrapPrintOptionalBool(key string, data map[string]any) {
+	value, ok := bootstrapBoolField(data, key)
+	if ok {
+		fmt.Printf("%s: %t\n", key, value)
+	}
+}
+
+func bootstrapPrintOptionalNumber(key string, data map[string]any) {
+	if data == nil {
+		return
+	}
+	value, ok := data[key]
+	if !ok {
+		return
+	}
+	switch number := value.(type) {
+	case float64:
+		if number == float64(int64(number)) {
+			fmt.Printf("%s: %d\n", key, int64(number))
+			return
+		}
+		fmt.Printf("%s: %v\n", key, number)
+	case int:
+		fmt.Printf("%s: %d\n", key, number)
+	case int64:
+		fmt.Printf("%s: %d\n", key, number)
+	default:
+		fmt.Printf("%s: %v\n", key, value)
+	}
 }
