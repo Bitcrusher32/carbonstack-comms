@@ -175,3 +175,195 @@ func captureOpenMLSBootstrapOutput(fn func() error) (string, error) {
 	}
 	return buf.String(), runErr
 }
+
+func TestOpenMLSBundleExportDevRequiresDeviceLabel(t *testing.T) {
+	err := cmdOpenMLSBundleExportDev([]string{})
+	if err == nil || !strings.Contains(err.Error(), "--sidecar-device-label is required") {
+		t.Fatalf("expected required sidecar device label error, got %v", err)
+	}
+}
+
+func TestOpenMLSConversationCreateDevRequiresDeviceAndConversation(t *testing.T) {
+	err := cmdOpenMLSConversationCreateDev([]string{"--sidecar-device-label", "alice-device"})
+	if err == nil || !strings.Contains(err.Error(), "--sidecar-device-label and --conversation are required") {
+		t.Fatalf("expected required sidecar device label and conversation error, got %v", err)
+	}
+}
+
+func TestOpenMLSConversationLoadCheckDevRequiresDeviceAndConversation(t *testing.T) {
+	err := cmdOpenMLSConversationLoadCheckDev([]string{"--conversation", "test-conversation"})
+	if err == nil || !strings.Contains(err.Error(), "--sidecar-device-label and --conversation are required") {
+		t.Fatalf("expected required sidecar device label and conversation error, got %v", err)
+	}
+}
+
+func TestOpenMLSBundleExportDevInvokesSidecarAndPrintsPaths(t *testing.T) {
+	old := runOpenMLSBootstrapSidecarForCommand
+	defer func() { runOpenMLSBootstrapSidecarForCommand = old }()
+
+	var gotDir string
+	var gotCommand string
+	var gotArgs []string
+
+	runOpenMLSBootstrapSidecarForCommand = func(sidecarDir string, sidecarCommand string, args ...string) (openMLSSidecarBootstrapEnvelope, error) {
+		gotDir = sidecarDir
+		gotCommand = sidecarCommand
+		gotArgs = append([]string{}, args...)
+		return openMLSSidecarBootstrapEnvelope{
+			OK:      true,
+			Command: "public-bundle-export",
+			Data: map[string]any{
+				"device_label":                   "bob-device",
+				"key_package_artifact_path_hint": ".carbonstack-openmls-sidecar-state/dev/devices/bob-device/public-bundle.keypackage.bin",
+			},
+		}, nil
+	}
+
+	out, err := captureOpenMLSBootstrapOutput(func() error {
+		return cmdOpenMLSBundleExportDev([]string{
+			"--sidecar-dir", "sidecar-test-dir",
+			"--sidecar-device-label", "bob-device",
+			"--write-artifact",
+		})
+	})
+	if err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+
+	if gotDir != "sidecar-test-dir" {
+		t.Fatalf("unexpected sidecar dir: %q", gotDir)
+	}
+	if gotCommand != "public-bundle-export" {
+		t.Fatalf("unexpected sidecar command: %q", gotCommand)
+	}
+	wantArgs := "--device-label bob-device --write-artifact"
+	if strings.Join(gotArgs, " ") != wantArgs {
+		t.Fatalf("unexpected sidecar args: %q", strings.Join(gotArgs, " "))
+	}
+
+	for _, want := range []string{
+		"command: openmls-bundle-export-dev",
+		"status: exported",
+		"sidecar_command: public-bundle-export",
+		"sidecar_device_label: bob-device",
+		"key_package_artifact_path_hint: .carbonstack-openmls-sidecar-state/dev/devices/bob-device/public-bundle.keypackage.bin",
+		"key_package_artifact_path: sidecar-test-dir/.carbonstack-openmls-sidecar-state/dev/devices/bob-device/public-bundle.keypackage.bin",
+		"warning: dev/pre-alpha OpenMLS bootstrap path; not production identity UX",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected output to contain %q, got:\n%s", want, out)
+		}
+	}
+}
+
+func TestOpenMLSConversationCreateDevInvokesSidecarAndPrintsStableOutput(t *testing.T) {
+	old := runOpenMLSBootstrapSidecarForCommand
+	defer func() { runOpenMLSBootstrapSidecarForCommand = old }()
+
+	var gotCommand string
+	var gotArgs []string
+
+	runOpenMLSBootstrapSidecarForCommand = func(sidecarDir string, sidecarCommand string, args ...string) (openMLSSidecarBootstrapEnvelope, error) {
+		gotCommand = sidecarCommand
+		gotArgs = append([]string{}, args...)
+		return openMLSSidecarBootstrapEnvelope{
+			OK:      true,
+			Command: "conversation-create",
+			Data: map[string]any{
+				"device_label":                   "alice-device",
+				"conversation_label":             "test-conversation",
+				"conversation_state_path_hint":   ".carbonstack-openmls-sidecar-state/dev/devices/alice-device/conversations/test-conversation",
+				"conversation_summary_path_hint": ".carbonstack-openmls-sidecar-state/dev/devices/alice-device/conversations/test-conversation/conversation-summary.json",
+				"provider_storage_path_hint":     ".carbonstack-openmls-sidecar-state/dev/devices/alice-device/conversations/test-conversation/provider-storage.json",
+			},
+		}, nil
+	}
+
+	out, err := captureOpenMLSBootstrapOutput(func() error {
+		return cmdOpenMLSConversationCreateDev([]string{
+			"--sidecar-device-label", "alice-device",
+			"--conversation", "test-conversation",
+		})
+	})
+	if err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+
+	if gotCommand != "conversation-create" {
+		t.Fatalf("unexpected sidecar command: %q", gotCommand)
+	}
+	wantArgs := "--device-label alice-device --conversation-label test-conversation"
+	if strings.Join(gotArgs, " ") != wantArgs {
+		t.Fatalf("unexpected sidecar args: %q", strings.Join(gotArgs, " "))
+	}
+
+	for _, want := range []string{
+		"command: openmls-conversation-create-dev",
+		"status: created",
+		"sidecar_command: conversation-create",
+		"sidecar_device_label: alice-device",
+		"sidecar_conversation_label: test-conversation",
+		"conversation_state_path_hint: .carbonstack-openmls-sidecar-state/dev/devices/alice-device/conversations/test-conversation",
+		"conversation_summary_path_hint: .carbonstack-openmls-sidecar-state/dev/devices/alice-device/conversations/test-conversation/conversation-summary.json",
+		"provider_storage_path_hint: .carbonstack-openmls-sidecar-state/dev/devices/alice-device/conversations/test-conversation/provider-storage.json",
+		"warning: dev/pre-alpha OpenMLS bootstrap path; not production conversation UX",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected output to contain %q, got:\n%s", want, out)
+		}
+	}
+}
+
+func TestOpenMLSConversationLoadCheckDevInvokesSidecarAndPrintsStableOutput(t *testing.T) {
+	old := runOpenMLSBootstrapSidecarForCommand
+	defer func() { runOpenMLSBootstrapSidecarForCommand = old }()
+
+	var gotCommand string
+	var gotArgs []string
+
+	runOpenMLSBootstrapSidecarForCommand = func(sidecarDir string, sidecarCommand string, args ...string) (openMLSSidecarBootstrapEnvelope, error) {
+		gotCommand = sidecarCommand
+		gotArgs = append([]string{}, args...)
+		return openMLSSidecarBootstrapEnvelope{
+			OK:      true,
+			Command: "conversation-load-check",
+			Data: map[string]any{
+				"device_label":       "alice-device",
+				"conversation_label": "test-conversation",
+				"group_reloadable":   true,
+			},
+		}, nil
+	}
+
+	out, err := captureOpenMLSBootstrapOutput(func() error {
+		return cmdOpenMLSConversationLoadCheckDev([]string{
+			"--sidecar-device-label", "alice-device",
+			"--conversation", "test-conversation",
+		})
+	})
+	if err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+
+	if gotCommand != "conversation-load-check" {
+		t.Fatalf("unexpected sidecar command: %q", gotCommand)
+	}
+	wantArgs := "--device-label alice-device --conversation-label test-conversation"
+	if strings.Join(gotArgs, " ") != wantArgs {
+		t.Fatalf("unexpected sidecar args: %q", strings.Join(gotArgs, " "))
+	}
+
+	for _, want := range []string{
+		"command: openmls-conversation-load-check-dev",
+		"status: loaded",
+		"sidecar_command: conversation-load-check",
+		"sidecar_device_label: alice-device",
+		"sidecar_conversation_label: test-conversation",
+		"group_reloadable: true",
+		"warning: dev/pre-alpha OpenMLS bootstrap path; not production conversation UX",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected output to contain %q, got:\n%s", want, out)
+		}
+	}
+}
