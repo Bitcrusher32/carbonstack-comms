@@ -59,21 +59,22 @@ CarbonStackComms is intended to preserve these constraints:
 - strict parser minimization;
 - no server-trusted identity changes.
 
-## Dev-only OpenMLS runtime command
+## Dev-only OpenMLS runtime commands
 
-The first explicit runtime OpenMLS command is:
+The explicit runtime OpenMLS dev commands are:
 
     go run ./cmd/comms openmls-send-dev
+    go run ./cmd/comms openmls-inbox-dev
 
-This command is dev-only and pre-alpha. It does not replace the existing stub-era `send` command yet.
+These commands are dev-only and pre-alpha. They do not replace the existing stub-era `send` / `inbox` commands yet.
 
-Current purpose:
+`openmls-send-dev` current purpose:
 
     call the OpenMLS sidecar `message-protect` command
     submit the resulting application-message artifact through the Cypher relay helper
     preserve dev-mode trust behavior by default, with optional `--strict`
 
-Minimal shape:
+Minimal send shape:
 
     go run ./cmd/comms openmls-send-dev \
       --to-device <recipient-cypher-device-id> \
@@ -82,6 +83,24 @@ Minimal shape:
       --message <plaintext> \
       [--message-label <label>] \
       [--strict]
+
+`openmls-inbox-dev` current purpose:
+
+    fetch the current device inbox from Cypher
+    skip unsupported non-OpenMLS application-message envelopes
+    write an OpenMLS application-message artifact through the relay helper
+    call the OpenMLS sidecar `message-open` command
+    print plaintext only after sidecar success
+    ack only after sidecar success when `--ack` is explicitly set
+
+Minimal inbox shape:
+
+    go run ./cmd/comms openmls-inbox-dev \
+      --sidecar-device-label <recipient-sidecar-device-label> \
+      --conversation <sidecar-conversation-label> \
+      [--message-label <label>] \
+      [--limit 1] \
+      [--ack]
 
 This is not mature messaging UX, not local-backbone, and not a production security claim.
 
