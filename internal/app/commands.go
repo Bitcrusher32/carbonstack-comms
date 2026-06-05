@@ -52,6 +52,10 @@ func Run(args []string) error {
 		return cmdOpenMLSSendDev(args[1:])
 	case "openmls-inbox-dev":
 		return cmdOpenMLSInboxDev(args[1:])
+	case "openmls-identity-create-dev":
+		return cmdOpenMLSIdentityCreateDev(args[1:])
+	case "openmls-identity-status-dev":
+		return cmdOpenMLSIdentityStatusDev(args[1:])
 	default:
 		return fmt.Errorf("unknown command: %s", args[0])
 	}
@@ -77,6 +81,8 @@ func usage() {
 	fmt.Println("  ack")
 	fmt.Println("  openmls-send-dev")
 	fmt.Println("  openmls-inbox-dev")
+	fmt.Println("  openmls-identity-create-dev")
+	fmt.Println("  openmls-identity-status-dev")
 }
 
 func cmdInit(args []string) error {

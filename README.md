@@ -182,3 +182,23 @@ The lower-level implementation harness remains available for debugging:
 License: MIT.
 See the repository's LICENSE file for more information.
 
+## Dev-only OpenMLS bootstrap commands
+
+These commands are development helpers for explicit OpenMLS sidecar bootstrap state.
+
+They are not production identity UX, not Relay Space join UX, not local-backbone, and not secure vault/state management.
+
+    openmls-identity-create-dev
+    openmls-identity-status-dev
+
+Current identity bootstrap examples:
+
+    go run ./cmd/comms openmls-identity-create-dev --sidecar-device-label carbonstack-dev-alice
+    go run ./cmd/comms openmls-identity-status-dev --sidecar-device-label carbonstack-dev-alice
+
+Boundary:
+
+    sidecar labels are explicit for now
+    Comms state/trust files are not mutated by these wrappers
+    existing send/inbox remain stub-era
+    dev-runtime-openmls remains the current manual smoke-profile proof
