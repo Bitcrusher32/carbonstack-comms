@@ -118,7 +118,26 @@ It does not implement production secure vault storage.
 
 Generated signer/provider state must not be committed.
 
-## Smoke harness
+## Dev runtime OpenMLS smoke proof
+
+The dev runtime smoke proof is:
+
+    scripts/dev-openmls-runtime-smoke.sh
+
+It creates a temporary local Cypher server, temporary Comms state files, dev-local OpenMLS sidecar identities, and a dev-local sidecar conversation. It then proves the current CLI runtime message path:
+
+    openmls-send-dev -> Cypher -> openmls-inbox-dev --ack
+
+Boundary:
+
+    this is dev/pre-alpha only
+    this is not local-backbone
+    this is not production messaging UX
+    this does not replace the old stub-era send/inbox commands
+    sidecar KeyPackage/Welcome/bootstrap setup is still direct dev setup
+    the application-message path is the runtime CLI proof target
+
+The script removes prior sidecar dev state before running and uses a temporary Cypher database.\n\n## Smoke harness
 
 Run the current OpenMLS backbone self-test:
 
