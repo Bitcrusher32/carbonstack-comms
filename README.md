@@ -231,6 +231,14 @@ Component-local notes live in:
 
 Provider mismatch handling is not implemented yet. The current plan preserves that provider observation alone must not verify a device, replace a known key, mutate `trust.json`, or trust Cypher/sidecar labels as identity authority.
 
+## Relay Space boundary
+
+CarbonStackComms has a planning note for the future Relay Space boundary:
+
+    docs/13-relay-space-boundary-v0.md
+
+Relay Space is routing/conversation infrastructure, not identity authority. Server membership claims, invite claims, Cypher delivery, and sidecar labels must not become verified local trust.
+
 ## What is not implemented
 
 CarbonStackComms does not currently provide:
