@@ -171,6 +171,16 @@ Component-local notes live in:
 
 This model describes current dev trust behavior and future trust requirements. It is not production identity safety, not secure vault storage, and not provider-state linkage implementation.
 
+## Provider-state linkage plan
+
+CarbonStackComms has a provider-state linkage plan for how OpenMLS sidecar/provider events should eventually map into Comms trust behavior.
+
+Component-local notes live in:
+
+    docs/07-provider-state-linkage-plan-v0.md
+
+Current provider-trust decisions are pure pre-integration policy helpers. They do not mutate `trust.json`, do not append `trust-events.jsonl`, and do not implement production provider-state linkage.
+
 ## What is not implemented
 
 CarbonStackComms does not currently provide:
