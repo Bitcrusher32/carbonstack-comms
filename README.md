@@ -247,6 +247,14 @@ CarbonStackComms has a decision record for the next narrow implementation target
 
 The preferred next implementation is separate `identity-candidates.json` storage owned by `internal/trust`. Candidate identity material must not automatically become verified trust, must not mutate `trust.json`, and must not affect send/open/ack behavior in the first spike.
 
+## Candidate review/update priority
+
+CarbonStackComms has a decision record for the next internal trust implementation target:
+
+    docs/15-candidate-review-update-priority-v0.md
+
+Candidate review/update mechanics should come before candidate/mismatch trust-history append integration. This remains internal trust-package work: no `trust.json` mutation, no `trust-events.jsonl` append, no verified identity import, no send/open/ack changes, no CLI, and no registry exposure yet.
+
 ## What is not implemented
 
 CarbonStackComms does not currently provide:
