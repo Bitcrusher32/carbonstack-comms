@@ -211,6 +211,16 @@ Component-local notes live in:
 
 No provider event currently appends `trust-events.jsonl` or mutates `trust.json`. Future append behavior must preserve the rule that provider observation alone does not verify identity.
 
+## Provider identity candidate / unverified import plan
+
+CarbonStackComms has a planning record for how provider-observed identity material may later become a candidate or unverified identity record.
+
+Component-local notes live in:
+
+    docs/11-provider-identity-candidate-import-plan-v0.md
+
+Provider-observed identity material is not trust. It must not automatically become verified, must not silently replace a known device, and must not let Cypher delivery or sidecar labels become trust roots.
+
 ## What is not implemented
 
 CarbonStackComms does not currently provide:
