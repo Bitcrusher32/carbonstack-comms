@@ -8,6 +8,10 @@ import (
 // ProviderTrustReport is a stable, non-mutating report shape for provider
 // trust decisions. It is intended for dev diagnostics and future CLI display.
 //
+// The structured JSON fields are the diagnostic source of truth. Summary is
+// interpretive helper text for humans and must not be treated as the policy
+// source of truth.
+//
 // It does not mutate trust.json.
 // It does not append trust-events.jsonl.
 // It does not import provider identity.
@@ -68,8 +72,11 @@ func ProviderTrustReportJSON(report ProviderTrustReport) (string, error) {
 	return string(body), nil
 }
 
-// ProviderTrustSummary returns a concise human-readable summary. It is designed
-// for diagnostics, not final UX copy.
+// ProviderTrustSummary returns concise human-readable helper text.
+//
+// The summary is interpretive diagnostic documentation, not the source of truth.
+// Callers that need stable behavior should inspect ProviderTrustReport fields or
+// ProviderTrustReportJSON output.
 func ProviderTrustSummary(report ProviderTrustReport) string {
 	parts := []string{
 		"event=" + report.Event,

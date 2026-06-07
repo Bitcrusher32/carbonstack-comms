@@ -181,6 +181,16 @@ Component-local notes live in:
 
 Current provider-trust decisions are pure pre-integration policy helpers. They do not mutate `trust.json`, do not append `trust-events.jsonl`, and do not implement production provider-state linkage.
 
+## Provider-trust report contract
+
+CarbonStackComms has an internal provider-trust report helper for inspecting pure `protocol.DecideProviderTrust` output.
+
+Component-local notes live in:
+
+    docs/08-provider-trust-report-contract-v0.md
+
+The structured JSON report fields are the diagnostic source of truth. Human summaries are interpretive helper text, not final UX copy and not the policy source of truth. The helper is non-mutating: it does not write `trust.json`, does not append `trust-events.jsonl`, and does not import provider identity.
+
 ## What is not implemented
 
 CarbonStackComms does not currently provide:
