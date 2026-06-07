@@ -255,6 +255,14 @@ CarbonStackComms has a decision record for the next internal trust implementatio
 
 Candidate review/update mechanics should come before candidate/mismatch trust-history append integration. This remains internal trust-package work: no `trust.json` mutation, no `trust-events.jsonl` append, no verified identity import, no send/open/ack changes, no CLI, and no registry exposure yet.
 
+## Reset/recovery/re-enrollment boundary
+
+CarbonStackComms has a decision record for reset/recovery/re-enrollment boundaries:
+
+    docs/16-reset-recovery-reenrollment-boundary-v0.md
+
+Reset, recovery, and re-enrollment are not implemented yet. The current boundary is Comms-first: define how local app state, `trust.json`, `trust-events.jsonl`, `identity-candidates.json`, OpenMLS provider state, relay staging artifacts, and generated dev artifacts should be classified before any destructive reset or recovery helper exists.
+
 ## What is not implemented
 
 CarbonStackComms does not currently provide:
