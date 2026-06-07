@@ -201,6 +201,16 @@ Component-local notes live in:
 
 No `provider-trust-report-dev` command exists yet. A future dev command should be JSON-first, non-mutating, and registry-tracked when it becomes useful.
 
+## Provider-originated trust-history append plan
+
+CarbonStackComms has a plan for how provider-originated security/trust observations may eventually append trust history.
+
+Component-local notes live in:
+
+    docs/10-provider-originated-trust-history-append-plan-v0.md
+
+No provider event currently appends `trust-events.jsonl` or mutates `trust.json`. Future append behavior must preserve the rule that provider observation alone does not verify identity.
+
 ## What is not implemented
 
 CarbonStackComms does not currently provide:
