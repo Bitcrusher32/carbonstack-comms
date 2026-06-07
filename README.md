@@ -1,4 +1,4 @@
-﻿# CarbonStackComms
+# CarbonStackComms
 
 CarbonStackComms is the text-first communications client component of CarbonStack.
 
@@ -153,6 +153,23 @@ Run broader validation:
 Use the main `carbonstack` repo for the current public runbook:
 
     docs/113-experimental-backbone-deployability-runbook-v0.md
+
+## Trust-state model
+
+CarbonStackComms has a development trust-state model covering:
+
+- unknown;
+- unverified;
+- verified;
+- changed;
+- revoked;
+- reserved compromised.
+
+Component-local notes live in:
+
+    docs/06-trust-state-model-v0.md
+
+This model describes current dev trust behavior and future trust requirements. It is not production identity safety, not secure vault storage, and not provider-state linkage implementation.
 
 ## What is not implemented
 
