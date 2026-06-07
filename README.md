@@ -221,6 +221,16 @@ Component-local notes live in:
 
 Provider-observed identity material is not trust. It must not automatically become verified, must not silently replace a known device, and must not let Cypher delivery or sidecar labels become trust roots.
 
+## Mapped provider identity mismatch plan
+
+CarbonStackComms has a planning record for how provider/candidate identity conflicts with known local device state should later become history-only, review-required, changed/reverify-required, or blocked.
+
+Component-local notes live in:
+
+    docs/12-mapped-provider-identity-mismatch-plan-v0.md
+
+Provider mismatch handling is not implemented yet. The current plan preserves that provider observation alone must not verify a device, replace a known key, mutate `trust.json`, or trust Cypher/sidecar labels as identity authority.
+
 ## What is not implemented
 
 CarbonStackComms does not currently provide:
