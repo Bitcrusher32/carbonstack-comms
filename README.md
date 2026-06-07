@@ -191,6 +191,16 @@ Component-local notes live in:
 
 The structured JSON report fields are the diagnostic source of truth. Human summaries are interpretive helper text, not final UX copy and not the policy source of truth. The helper is non-mutating: it does not write `trust.json`, does not append `trust-events.jsonl`, and does not import provider identity.
 
+## Provider-trust report exposure decision
+
+The provider-trust report helper remains internal-only for now.
+
+Component-local notes live in:
+
+    docs/09-provider-trust-report-exposure-decision-v0.md
+
+No `provider-trust-report-dev` command exists yet. A future dev command should be JSON-first, non-mutating, and registry-tracked when it becomes useful.
+
 ## What is not implemented
 
 CarbonStackComms does not currently provide:
