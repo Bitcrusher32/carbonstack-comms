@@ -239,6 +239,14 @@ CarbonStackComms has a planning note for the future Relay Space boundary:
 
 Relay Space is routing/conversation infrastructure, not identity authority. Server membership claims, invite claims, Cypher delivery, and sidecar labels must not become verified local trust.
 
+## Candidate identity storage priority
+
+CarbonStackComms has a decision record for the next narrow implementation target:
+
+    docs/14-candidate-identity-storage-priority-v0.md
+
+The preferred next implementation is separate `identity-candidates.json` storage owned by `internal/trust`. Candidate identity material must not automatically become verified trust, must not mutate `trust.json`, and must not affect send/open/ack behavior in the first spike.
+
 ## What is not implemented
 
 CarbonStackComms does not currently provide:
