@@ -263,6 +263,14 @@ CarbonStackComms has a decision record for reset/recovery/re-enrollment boundari
 
 Reset, recovery, and re-enrollment are not implemented yet. The current boundary is Comms-first: define how local app state, `trust.json`, `trust-events.jsonl`, `identity-candidates.json`, OpenMLS provider state, relay staging artifacts, and generated dev artifacts should be classified before any destructive reset or recovery helper exists.
 
+## Post-recovery-classifier priority
+
+CarbonStackComms has a decision record for the next internal trust implementation target after the pure reset/recovery classifier:
+
+    docs/17-post-recovery-classifier-priority-v0.md
+
+The next target is recovery-history append helpers. These should record selected recovery classifications in `trust-events.jsonl` without mutating `trust.json`, without mutating `identity-candidates.json`, without verifying identity, without replacing key material, without send/open/ack changes, and without CLI/registry exposure.
+
 ## What is not implemented
 
 CarbonStackComms does not currently provide:
