@@ -279,6 +279,14 @@ CarbonStackComms has a component-local reassessment after the recovery orchestra
 
 The current recovery orchestration path is internal and non-destructive. It can classify local recovery state and optionally append recovery-history events, but it is not recovery execution, not a verification ceremony, not Relay Space, not local-backbone, and not a CLI/registry surface.
 
+## Relay Space join/invite/member boundary
+
+CarbonStackComms has a component-local planning record for future Relay Space join/invite/member mechanics:
+
+    docs/19-relay-space-join-invite-member-boundary-v0.md
+
+Relay Space is a vector to OpenMLS join and a routing/conversation container. It is not local trust. OpenMLS/provider join is cryptographic group participation. Local verification remains the actual trust/auth/presence decision.
+
 ## What is not implemented
 
 CarbonStackComms does not currently provide:
