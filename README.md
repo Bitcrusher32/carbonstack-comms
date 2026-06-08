@@ -295,6 +295,14 @@ CarbonStackComms has a component-local planning record for future provider/OpenM
 
 Broad provider live-flow remains deferred. Future wiring must preserve candidate/review/recovery/trust boundaries, must not verify identity from provider observation alone, must not mutate `trust.json` from provider observation alone, and must keep ack gated on successful sidecar message-open/consume.
 
+## Validation profile boundary
+
+CarbonStackComms has a component-local planning record for future validation-profile participation:
+
+    docs/21-validation-profile-boundary-v0.md
+
+Future validation must distinguish trust-bearing state, identity-bearing state, provider state, and generated/build artifacts. Cleanup is not recovery, provider observation is not verification, and validation success is not a production/security claim.
+
 ## What is not implemented
 
 CarbonStackComms does not currently provide:
