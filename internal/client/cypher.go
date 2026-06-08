@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strings"
 )
 
 type ErrorResponse struct {
@@ -74,6 +76,115 @@ type InboxResponse struct {
 
 type AckEnvelopeResponse struct {
 	EnvelopeID     string `json:"envelope_id"`
+	DeliveryState  string `json:"delivery_state"`
+	AcknowledgedAt string `json:"acknowledged_at"`
+}
+
+type RelaySpaceResponse struct {
+	RelaySpaceID       string `json:"relay_space_id"`
+	DisplayLabel       string `json:"display_label"`
+	CreatedByAccountID string `json:"created_by_account_id"`
+	CreatedByDeviceID  string `json:"created_by_device_id"`
+	CreatedAt          string `json:"created_at"`
+	DisabledAt         string `json:"disabled_at"`
+}
+
+type ListRelaySpacesResponse struct {
+	RelaySpaces []RelaySpaceResponse `json:"relay_spaces"`
+}
+
+type RelaySpaceInviteResponse struct {
+	RelaySpaceInviteID string `json:"relay_space_invite_id"`
+	RelaySpaceID       string `json:"relay_space_id"`
+	InviteTokenHash    string `json:"invite_token_hash"`
+	DisplayCode        string `json:"display_code"`
+	WordCode           string `json:"word_code"`
+	CreatedByMemberID  string `json:"created_by_member_id"`
+	CreatedAt          string `json:"created_at"`
+	ExpiresAt          string `json:"expires_at"`
+	MaxClaims          *int   `json:"max_claims,omitempty"`
+	ClaimCount         int    `json:"claim_count"`
+	State              string `json:"state"`
+	Note               string `json:"note"`
+}
+
+type CreateRelaySpaceInviteResponse struct {
+	RelaySpaceInvite RelaySpaceInviteResponse `json:"relay_space_invite"`
+	InviteToken      string                   `json:"invite_token"`
+}
+
+type CreateRelaySpaceInviteInput struct {
+	RelaySpaceInviteID string `json:"relay_space_invite_id,omitempty"`
+	InviteToken        string `json:"invite_token,omitempty"`
+	InviteTokenHash    string `json:"invite_token_hash,omitempty"`
+	DisplayCode        string `json:"display_code,omitempty"`
+	WordCode           string `json:"word_code,omitempty"`
+	CreatedByMemberID  string `json:"created_by_member_id,omitempty"`
+	ExpiresAt          string `json:"expires_at,omitempty"`
+	MaxClaims          *int   `json:"max_claims,omitempty"`
+	State              string `json:"state,omitempty"`
+	Note               string `json:"note,omitempty"`
+}
+
+type RelaySpaceMemberResponse struct {
+	RoutingMemberID string `json:"routing_member_id"`
+	RelaySpaceID    string `json:"relay_space_id"`
+	AccountID       string `json:"account_id"`
+	DeviceID        string `json:"device_id"`
+	DisplayLabel    string `json:"display_label"`
+	State           string `json:"state"`
+	JoinedAt        string `json:"joined_at"`
+	LastSeenAt      string `json:"last_seen_at"`
+	DisabledAt      string `json:"disabled_at"`
+}
+
+type RegisterRelaySpaceMemberInput struct {
+	RoutingMemberID string `json:"routing_member_id,omitempty"`
+	AccountID       string `json:"account_id"`
+	DeviceID        string `json:"device_id,omitempty"`
+	DisplayLabel    string `json:"display_label,omitempty"`
+	State           string `json:"state,omitempty"`
+	LastSeenAt      string `json:"last_seen_at,omitempty"`
+}
+
+type ListRelaySpaceMembersResponse struct {
+	RelaySpaceID string                     `json:"relay_space_id"`
+	Members      []RelaySpaceMemberResponse `json:"members"`
+}
+
+type SubmitRelaySpaceEnvelopeResponse struct {
+	EnvelopeID       string `json:"envelope_id"`
+	RelaySpaceID     string `json:"relay_space_id"`
+	DeliveryState    string `json:"delivery_state"`
+	ServerReceivedAt string `json:"server_received_at"`
+	PayloadSHA256    string `json:"payload_sha256"`
+	PayloadSizeBytes int64  `json:"payload_size_bytes"`
+}
+
+type RelaySpaceEnvelopeRecord struct {
+	EnvelopeID        string `json:"envelope_id"`
+	RelaySpaceID      string `json:"relay_space_id"`
+	SenderDeviceID    string `json:"sender_device_id"`
+	RecipientDeviceID string `json:"recipient_device_id"`
+	ContentType       string `json:"content_type"`
+	ProtocolVersion   string `json:"protocol_version"`
+	CiphertextB64     string `json:"ciphertext_b64"`
+	PayloadSHA256     string `json:"payload_sha256"`
+	PayloadSizeBytes  int64  `json:"payload_size_bytes"`
+	ClientCreatedAt   string `json:"client_created_at"`
+	ServerReceivedAt  string `json:"server_received_at"`
+	DeliveryState     string `json:"delivery_state"`
+}
+
+type RelaySpaceInboxResponse struct {
+	RelaySpaceID string                     `json:"relay_space_id"`
+	DeviceID     string                     `json:"device_id"`
+	Envelopes    []RelaySpaceEnvelopeRecord `json:"envelopes"`
+}
+
+type AckRelaySpaceEnvelopeResponse struct {
+	EnvelopeID     string `json:"envelope_id"`
+	RelaySpaceID   string `json:"relay_space_id"`
 	DeliveryState  string `json:"delivery_state"`
 	AcknowledgedAt string `json:"acknowledged_at"`
 }
@@ -148,6 +259,81 @@ func (c CypherClient) AckEnvelope(envelopeID string, recipientDeviceID string) (
 	}
 	err := postJSON(c.ServerURL+"/v0/envelopes/"+envelopeID+"/ack", req, &resp)
 	return resp, err
+}
+
+func (c CypherClient) CreateRelaySpace(relaySpaceID string, displayLabel string, createdByAccountID string, createdByDeviceID string) (RelaySpaceResponse, error) {
+	var resp RelaySpaceResponse
+	req := map[string]string{
+		"relay_space_id":        relaySpaceID,
+		"display_label":         displayLabel,
+		"created_by_account_id": createdByAccountID,
+		"created_by_device_id":  createdByDeviceID,
+	}
+	err := postJSON(c.endpoint("/v0/relay-spaces"), req, &resp)
+	return resp, err
+}
+
+func (c CypherClient) ListRelaySpaces() (ListRelaySpacesResponse, error) {
+	var resp ListRelaySpacesResponse
+	err := getJSON(c.endpoint("/v0/relay-spaces"), &resp)
+	return resp, err
+}
+
+func (c CypherClient) GetRelaySpace(relaySpaceID string) (RelaySpaceResponse, error) {
+	var resp RelaySpaceResponse
+	err := getJSON(c.endpoint("/v0/relay-spaces/"+url.PathEscape(relaySpaceID)), &resp)
+	return resp, err
+}
+
+func (c CypherClient) CreateRelaySpaceInvite(relaySpaceID string, input CreateRelaySpaceInviteInput) (CreateRelaySpaceInviteResponse, error) {
+	var resp CreateRelaySpaceInviteResponse
+	err := postJSON(c.endpoint("/v0/relay-spaces/"+url.PathEscape(relaySpaceID)+"/invites"), input, &resp)
+	return resp, err
+}
+
+func (c CypherClient) RegisterRelaySpaceMember(relaySpaceID string, input RegisterRelaySpaceMemberInput) (RelaySpaceMemberResponse, error) {
+	var resp RelaySpaceMemberResponse
+	err := postJSON(c.endpoint("/v0/relay-spaces/"+url.PathEscape(relaySpaceID)+"/members"), input, &resp)
+	return resp, err
+}
+
+func (c CypherClient) ListRelaySpaceMembers(relaySpaceID string) (ListRelaySpaceMembersResponse, error) {
+	var resp ListRelaySpaceMembersResponse
+	err := getJSON(c.endpoint("/v0/relay-spaces/"+url.PathEscape(relaySpaceID)+"/members"), &resp)
+	return resp, err
+}
+
+func (c CypherClient) SubmitRelaySpaceEnvelope(relaySpaceID string, senderDeviceID string, recipientDeviceID string, contentType string, protocolVersion string, ciphertextB64 string, clientCreatedAt string) (SubmitRelaySpaceEnvelopeResponse, error) {
+	var resp SubmitRelaySpaceEnvelopeResponse
+	req := map[string]string{
+		"sender_device_id":    senderDeviceID,
+		"recipient_device_id": recipientDeviceID,
+		"content_type":        contentType,
+		"protocol_version":    protocolVersion,
+		"ciphertext_b64":      ciphertextB64,
+		"client_created_at":   clientCreatedAt,
+	}
+	err := postJSON(c.endpoint("/v0/relay-spaces/"+url.PathEscape(relaySpaceID)+"/envelopes"), req, &resp)
+	return resp, err
+}
+
+func (c CypherClient) RelaySpaceInbox(relaySpaceID string, deviceID string) (RelaySpaceInboxResponse, error) {
+	var resp RelaySpaceInboxResponse
+	err := getJSON(c.endpoint("/v0/relay-spaces/"+url.PathEscape(relaySpaceID)+"/devices/"+url.PathEscape(deviceID)+"/envelopes"), &resp)
+	return resp, err
+}
+
+func (c CypherClient) AckRelaySpaceEnvelope(relaySpaceID string, envelopeID string, recipientDeviceID string) (AckRelaySpaceEnvelopeResponse, error) {
+	var resp AckRelaySpaceEnvelopeResponse
+	req := map[string]string{
+		"recipient_device_id": recipientDeviceID,
+	}
+	err := postJSON(c.endpoint("/v0/relay-spaces/"+url.PathEscape(relaySpaceID)+"/envelopes/"+url.PathEscape(envelopeID)+"/ack"), req, &resp)
+	return resp, err
+}
+
+func (c CypherClient) endpoint(path string) string {
+	return strings.TrimRight(c.ServerURL, "/") + path
 }
 
 func postJSON(url string, req any, out any) error {
