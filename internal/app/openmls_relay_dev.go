@@ -295,6 +295,120 @@ func cmdOpenMLSRelayWelcomeInboxDev(args []string) error {
 	return nil
 }
 
+func cmdOpenMLSRelayAddMemberDev(args []string) error {
+	fs := flag.NewFlagSet("openmls-relay-add-member-dev", flag.ExitOnError)
+	statePath := fs.String("state", state.DefaultStatePath, "local state file path")
+	relaySpaceID := fs.String("relay-space", "", "Relay Space ID")
+	sidecarDir := fs.String("sidecar-dir", defaultOpenMLSSidecarDir, "OpenMLS sidecar directory")
+	sidecarDeviceLabel := fs.String("sidecar-device-label", "", "OpenMLS sidecar device label")
+	conversationLabel := fs.String("conversation", "", "OpenMLS sidecar conversation label")
+	welcomeToDevice := fs.String("welcome-to-device", "", "recipient Cypher device ID for the produced Welcome; defaults to KeyPackage envelope sender_device_id")
+	clientCreatedAt := fs.String("client-created-at", "", "client-created-at override for Welcome submit; defaults to current UTC time")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	if strings.TrimSpace(*relaySpaceID) == "" || strings.TrimSpace(*sidecarDeviceLabel) == "" || strings.TrimSpace(*conversationLabel) == "" {
+		return errors.New("--relay-space, --sidecar-device-label, and --conversation are required")
+	}
+
+	s, err := state.RequireReadyDevice(*statePath)
+	if err != nil {
+		return err
+	}
+
+	c := client.New(s.ServerURL)
+	envelopes, err := relaySpaceOpenMLSArtifactInboxForCommand(c, *relaySpaceID, s.DeviceID, relay.ArtifactKindKeyPackage)
+	if err != nil {
+		return err
+	}
+	if len(envelopes) == 0 {
+		return errors.New("no Relay Space KeyPackage envelopes available for add-member")
+	}
+
+	keyPackageEnvelope := envelopes[0]
+	keyPackagePath, err := writeRelayKeyPackageInboxDevArtifact(keyPackageEnvelope, 0)
+	if err != nil {
+		return fmt.Errorf("write Relay Space KeyPackage artifact: %w", err)
+	}
+
+	welcomeRecipientDeviceID := strings.TrimSpace(*welcomeToDevice)
+	if welcomeRecipientDeviceID == "" {
+		welcomeRecipientDeviceID = strings.TrimSpace(keyPackageEnvelope.SenderDeviceID)
+	}
+	if welcomeRecipientDeviceID == "" {
+		return errors.New("Welcome recipient device is required; pass --welcome-to-device or use a KeyPackage envelope with sender_device_id")
+	}
+
+	envelope, err := runOpenMLSBootstrapSidecarForCommand(
+		*sidecarDir,
+		"conversation-add-member",
+		"--device-label", *sidecarDeviceLabel,
+		"--conversation-label", *conversationLabel,
+		"--member-keypackage", keyPackagePath,
+	)
+	if err != nil {
+		return err
+	}
+
+	welcomeHint := bootstrapStringField(envelope.Data, "welcome_artifact_path_hint")
+	welcomePath := bootstrapPathFromHint(*sidecarDir, welcomeHint)
+	if welcomePath == "" {
+		return errors.New("OpenMLS sidecar conversation-add-member did not return welcome_artifact_path_hint")
+	}
+
+	welcomeResp, err := submitRelaySpaceWelcomeEnvelopeForCommand(
+		c,
+		*relaySpaceID,
+		s.DeviceID,
+		welcomeRecipientDeviceID,
+		welcomePath,
+		*clientCreatedAt,
+	)
+	if err != nil {
+		return err
+	}
+
+	deviceLabel := bootstrapStringField(envelope.Data, "device_label")
+	if deviceLabel == "" {
+		deviceLabel = *sidecarDeviceLabel
+	}
+	conversation := bootstrapStringField(envelope.Data, "conversation_label")
+	if conversation == "" {
+		conversation = *conversationLabel
+	}
+
+	fmt.Println("openmls relay add-member dev")
+	fmt.Println("command: openmls-relay-add-member-dev")
+	fmt.Println("status: welcome_created_and_sent")
+	fmt.Printf("relay_space_id: %s\n", *relaySpaceID)
+	fmt.Printf("local_device_id: %s\n", s.DeviceID)
+	fmt.Printf("keypackage_envelope_id: %s\n", keyPackageEnvelope.EnvelopeID)
+	fmt.Printf("keypackage_from_device: %s\n", keyPackageEnvelope.SenderDeviceID)
+	fmt.Printf("keypackage_artifact_path: %s\n", keyPackagePath)
+	fmt.Printf("sidecar_command: %s\n", envelope.Command)
+	fmt.Printf("sidecar_device_label: %s\n", deviceLabel)
+	fmt.Printf("sidecar_conversation_label: %s\n", conversation)
+	fmt.Printf("welcome_recipient_device_id: %s\n", welcomeRecipientDeviceID)
+	fmt.Printf("welcome_artifact_path: %s\n", welcomePath)
+	fmt.Printf("welcome_envelope_id: %s\n", welcomeResp.EnvelopeID)
+	fmt.Printf("welcome_delivery_state: %s\n", welcomeResp.DeliveryState)
+	fmt.Printf("welcome_server_received_at: %s\n", welcomeResp.ServerReceivedAt)
+	fmt.Printf("welcome_payload_sha256: %s\n", welcomeResp.PayloadSHA256)
+	fmt.Printf("welcome_payload_size_bytes: %d\n", welcomeResp.PayloadSizeBytes)
+	fmt.Println("keypackage_acked: false")
+	fmt.Println("welcome_acked: false")
+	bootstrapPrintOptionalBool("member_added", envelope.Data)
+	bootstrapPrintOptionalBool("welcome_artifact_written", envelope.Data)
+	bootstrapPrintOptionalBool("group_reloadable", envelope.Data)
+	bootstrapPrintOptionalNumber("member_count_before", envelope.Data)
+	bootstrapPrintOptionalNumber("member_count_after", envelope.Data)
+	bootstrapPrintOptionalString("epoch_before", envelope.Data)
+	bootstrapPrintOptionalString("epoch_after", envelope.Data)
+	fmt.Println("warning: dev/pre-alpha Relay Space add-member scaffold; not join automation, identity verification, local-backbone, or production UX")
+	return nil
+}
+
 func writeRelayKeyPackageInboxDevArtifact(envelope client.RelaySpaceEnvelopeRecord, index int) (string, error) {
 	root, err := os.MkdirTemp("", "carbonstack-openmls-relay-keypackage-dev-")
 	if err != nil {
