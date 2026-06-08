@@ -287,6 +287,14 @@ CarbonStackComms has a component-local planning record for future Relay Space jo
 
 Relay Space is a vector to OpenMLS join and a routing/conversation container. It is not local trust. OpenMLS/provider join is cryptographic group participation. Local verification remains the actual trust/auth/presence decision.
 
+## Provider live-flow boundary
+
+CarbonStackComms has a component-local planning record for future provider/OpenMLS live-flow wiring:
+
+    docs/20-provider-live-flow-boundary-v0.md
+
+Broad provider live-flow remains deferred. Future wiring must preserve candidate/review/recovery/trust boundaries, must not verify identity from provider observation alone, must not mutate `trust.json` from provider observation alone, and must keep ack gated on successful sidecar message-open/consume.
+
 ## What is not implemented
 
 CarbonStackComms does not currently provide:
