@@ -271,6 +271,14 @@ CarbonStackComms has a decision record for the next internal trust implementatio
 
 The next target is recovery-history append helpers. These should record selected recovery classifications in `trust-events.jsonl` without mutating `trust.json`, without mutating `identity-candidates.json`, without verifying identity, without replacing key material, without send/open/ack changes, and without CLI/registry exposure.
 
+## Post-recovery-orchestration boundary
+
+CarbonStackComms has a component-local reassessment after the recovery orchestration helper:
+
+    docs/18-post-recovery-orchestration-boundary-v0.md
+
+The current recovery orchestration path is internal and non-destructive. It can classify local recovery state and optionally append recovery-history events, but it is not recovery execution, not a verification ceremony, not Relay Space, not local-backbone, and not a CLI/registry surface.
+
 ## What is not implemented
 
 CarbonStackComms does not currently provide:
