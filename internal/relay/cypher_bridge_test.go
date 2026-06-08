@@ -380,3 +380,255 @@ func TestWriteOpenMLSArtifactFromRelaySpaceEnvelopeRejectsMissingRelaySpaceID(t 
 		t.Fatalf("expected relay_space_id required error, got %v", err)
 	}
 }
+
+func TestRelaySpaceKeyPackageAndWelcomeTransportHelpers(t *testing.T) {
+	dir := t.TempDir()
+
+	keyPackagePath := filepath.Join(dir, "public-bundle.keypackage.bin")
+	keyPackagePayload := []byte("stub-keypackage-payload")
+	if err := os.WriteFile(keyPackagePath, keyPackagePayload, 0o600); err != nil {
+		t.Fatalf("write keypackage artifact: %v", err)
+	}
+
+	welcomePath := filepath.Join(dir, "welcome.bin")
+	welcomePayload := []byte("stub-welcome-payload")
+	if err := os.WriteFile(welcomePath, welcomePayload, 0o600); err != nil {
+		t.Fatalf("write welcome artifact: %v", err)
+	}
+
+	var captured []map[string]string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v0/relay-spaces/relay-space-1/envelopes":
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+
+			var req map[string]string
+			if err := json.Unmarshal(body, &req); err != nil {
+				t.Fatalf("decode request body: %v\n%s", err, string(body))
+			}
+			captured = append(captured, req)
+
+			contentType := req["content_type"]
+			envelopeID := "envelope-keypackage"
+			payloadSize := len(keyPackagePayload)
+			if contentType == ContentTypeOpenMLSWelcome {
+				envelopeID = "envelope-welcome"
+				payloadSize = len(welcomePayload)
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(client.SubmitRelaySpaceEnvelopeResponse{
+				EnvelopeID:       envelopeID,
+				RelaySpaceID:     "relay-space-1",
+				DeliveryState:    "queued",
+				ServerReceivedAt: "2026-06-08T00:00:00Z",
+				PayloadSHA256:    strings.Repeat("a", 64),
+				PayloadSizeBytes: int64(payloadSize),
+			})
+
+		case r.Method == http.MethodGet && r.URL.Path == "/v0/relay-spaces/relay-space-1/devices/bob-device/envelopes":
+			keyPackageSHA256, keyPackageSize := payloadMetadataForTest(keyPackagePayload)
+			welcomeSHA256, welcomeSize := payloadMetadataForTest(welcomePayload)
+
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(client.RelaySpaceInboxResponse{
+				RelaySpaceID: "relay-space-1",
+				DeviceID:     "bob-device",
+				Envelopes: []client.RelaySpaceEnvelopeRecord{
+					{
+						EnvelopeID:        "envelope-keypackage",
+						RelaySpaceID:      "relay-space-1",
+						SenderDeviceID:    "bob-device",
+						RecipientDeviceID: "alice-device",
+						ContentType:       ContentTypeOpenMLSKeyPackage,
+						ProtocolVersion:   ProtocolVersionOpenMLSSidecar,
+						CiphertextB64:     EncodePayloadBase64(keyPackagePayload),
+						PayloadSHA256:     keyPackageSHA256,
+						PayloadSizeBytes:  keyPackageSize,
+						DeliveryState:     "queued",
+					},
+					{
+						EnvelopeID:        "envelope-welcome",
+						RelaySpaceID:      "relay-space-1",
+						SenderDeviceID:    "alice-device",
+						RecipientDeviceID: "bob-device",
+						ContentType:       ContentTypeOpenMLSWelcome,
+						ProtocolVersion:   ProtocolVersionOpenMLSSidecar,
+						CiphertextB64:     EncodePayloadBase64(welcomePayload),
+						PayloadSHA256:     welcomeSHA256,
+						PayloadSizeBytes:  welcomeSize,
+						DeliveryState:     "queued",
+					},
+				},
+			})
+
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	c := client.New(strings.TrimRight(server.URL, "/"))
+
+	keyPackageResp, err := SubmitRelaySpaceKeyPackageEnvelope(
+		c,
+		"relay-space-1",
+		"bob-device",
+		"alice-device",
+		keyPackagePath,
+		"2026-06-08T00:00:00Z",
+	)
+	if err != nil {
+		t.Fatalf("SubmitRelaySpaceKeyPackageEnvelope: %v", err)
+	}
+	if keyPackageResp.EnvelopeID != "envelope-keypackage" {
+		t.Fatalf("keypackage envelope_id = %q", keyPackageResp.EnvelopeID)
+	}
+
+	welcomeResp, err := SubmitRelaySpaceWelcomeEnvelope(
+		c,
+		"relay-space-1",
+		"alice-device",
+		"bob-device",
+		welcomePath,
+		"2026-06-08T00:00:01Z",
+	)
+	if err != nil {
+		t.Fatalf("SubmitRelaySpaceWelcomeEnvelope: %v", err)
+	}
+	if welcomeResp.EnvelopeID != "envelope-welcome" {
+		t.Fatalf("welcome envelope_id = %q", welcomeResp.EnvelopeID)
+	}
+
+	if len(captured) != 2 {
+		t.Fatalf("captured request count = %d, want 2", len(captured))
+	}
+	if captured[0]["content_type"] != ContentTypeOpenMLSKeyPackage {
+		t.Fatalf("first content_type = %q, want %q", captured[0]["content_type"], ContentTypeOpenMLSKeyPackage)
+	}
+	if captured[0]["ciphertext_b64"] != EncodePayloadBase64(keyPackagePayload) {
+		t.Fatalf("first ciphertext_b64 did not match keypackage payload")
+	}
+	if captured[1]["content_type"] != ContentTypeOpenMLSWelcome {
+		t.Fatalf("second content_type = %q, want %q", captured[1]["content_type"], ContentTypeOpenMLSWelcome)
+	}
+	if captured[1]["ciphertext_b64"] != EncodePayloadBase64(welcomePayload) {
+		t.Fatalf("second ciphertext_b64 did not match welcome payload")
+	}
+
+	keyPackages, err := RelaySpaceOpenMLSArtifactInbox(c, "relay-space-1", "bob-device", ArtifactKindKeyPackage)
+	if err != nil {
+		t.Fatalf("RelaySpaceOpenMLSArtifactInbox keypackage: %v", err)
+	}
+	if len(keyPackages) != 1 {
+		t.Fatalf("keypackage filtered inbox len = %d, want 1", len(keyPackages))
+	}
+	if keyPackages[0].ContentType != ContentTypeOpenMLSKeyPackage {
+		t.Fatalf("keypackage filtered content_type = %q", keyPackages[0].ContentType)
+	}
+
+	welcomes, err := RelaySpaceOpenMLSArtifactInbox(c, "relay-space-1", "bob-device", ArtifactKindWelcome)
+	if err != nil {
+		t.Fatalf("RelaySpaceOpenMLSArtifactInbox welcome: %v", err)
+	}
+	if len(welcomes) != 1 {
+		t.Fatalf("welcome filtered inbox len = %d, want 1", len(welcomes))
+	}
+	if welcomes[0].ContentType != ContentTypeOpenMLSWelcome {
+		t.Fatalf("welcome filtered content_type = %q", welcomes[0].ContentType)
+	}
+
+	keyPackageOut := filepath.Join(dir, "downloaded", "public-bundle.keypackage.bin")
+	if err := WriteRelaySpaceKeyPackageFromEnvelope(keyPackageOut, keyPackages[0]); err != nil {
+		t.Fatalf("WriteRelaySpaceKeyPackageFromEnvelope: %v", err)
+	}
+	gotKeyPackage, err := os.ReadFile(keyPackageOut)
+	if err != nil {
+		t.Fatalf("read keypackage output: %v", err)
+	}
+	if !bytes.Equal(gotKeyPackage, keyPackagePayload) {
+		t.Fatalf("keypackage output = %x, want %x", gotKeyPackage, keyPackagePayload)
+	}
+
+	welcomeOut := filepath.Join(dir, "downloaded", "welcome.bin")
+	if err := WriteRelaySpaceWelcomeFromEnvelope(welcomeOut, welcomes[0]); err != nil {
+		t.Fatalf("WriteRelaySpaceWelcomeFromEnvelope: %v", err)
+	}
+	gotWelcome, err := os.ReadFile(welcomeOut)
+	if err != nil {
+		t.Fatalf("read welcome output: %v", err)
+	}
+	if !bytes.Equal(gotWelcome, welcomePayload) {
+		t.Fatalf("welcome output = %x, want %x", gotWelcome, welcomePayload)
+	}
+}
+
+func TestRelaySpaceOpenMLSArtifactInboxRejectsInvalidInputs(t *testing.T) {
+	c := client.New("http://127.0.0.1:1")
+
+	_, err := RelaySpaceOpenMLSArtifactInbox(c, "", "device-1", ArtifactKindKeyPackage)
+	if err == nil {
+		t.Fatal("expected missing relay_space_id error")
+	}
+	if !strings.Contains(err.Error(), "relay_space_id is required") {
+		t.Fatalf("expected relay_space_id error, got %v", err)
+	}
+
+	_, err = RelaySpaceOpenMLSArtifactInbox(c, "relay-space-1", "", ArtifactKindKeyPackage)
+	if err == nil {
+		t.Fatal("expected missing device_id error")
+	}
+	if !strings.Contains(err.Error(), "device_id is required") {
+		t.Fatalf("expected device_id error, got %v", err)
+	}
+
+	_, err = RelaySpaceOpenMLSArtifactInbox(c, "relay-space-1", "device-1", "signer.json")
+	if err == nil {
+		t.Fatal("expected unsupported artifact kind error")
+	}
+	if !strings.Contains(err.Error(), ErrUnsupportedArtifactKind.Error()) {
+		t.Fatalf("expected unsupported artifact kind error, got %v", err)
+	}
+}
+
+func TestRelaySpaceSpecificWritersRejectWrongContentType(t *testing.T) {
+	payload := []byte("wrong content type")
+	payloadSHA256, payloadSizeBytes := payloadMetadataForTest(payload)
+
+	keyPackageErr := WriteRelaySpaceKeyPackageFromEnvelope(filepath.Join(t.TempDir(), "artifact.bin"), client.RelaySpaceEnvelopeRecord{
+		EnvelopeID:       "envelope-1",
+		RelaySpaceID:     "relay-space-1",
+		ContentType:      ContentTypeOpenMLSWelcome,
+		ProtocolVersion:  ProtocolVersionOpenMLSSidecar,
+		CiphertextB64:    EncodePayloadBase64(payload),
+		PayloadSHA256:    payloadSHA256,
+		PayloadSizeBytes: payloadSizeBytes,
+	})
+	if keyPackageErr == nil {
+		t.Fatal("expected KeyPackage writer wrong content type error")
+	}
+	if !strings.Contains(keyPackageErr.Error(), "unsupported KeyPackage content_type") {
+		t.Fatalf("expected KeyPackage content_type error, got %v", keyPackageErr)
+	}
+
+	welcomeErr := WriteRelaySpaceWelcomeFromEnvelope(filepath.Join(t.TempDir(), "artifact.bin"), client.RelaySpaceEnvelopeRecord{
+		EnvelopeID:       "envelope-1",
+		RelaySpaceID:     "relay-space-1",
+		ContentType:      ContentTypeOpenMLSKeyPackage,
+		ProtocolVersion:  ProtocolVersionOpenMLSSidecar,
+		CiphertextB64:    EncodePayloadBase64(payload),
+		PayloadSHA256:    payloadSHA256,
+		PayloadSizeBytes: payloadSizeBytes,
+	})
+	if welcomeErr == nil {
+		t.Fatal("expected Welcome writer wrong content type error")
+	}
+	if !strings.Contains(welcomeErr.Error(), "unsupported Welcome content_type") {
+		t.Fatalf("expected Welcome content_type error, got %v", welcomeErr)
+	}
+}

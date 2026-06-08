@@ -109,6 +109,93 @@ func SubmitRelaySpaceOpenMLSArtifactEnvelope(
 	)
 }
 
+func SubmitRelaySpaceKeyPackageEnvelope(
+	c client.CypherClient,
+	relaySpaceID string,
+	senderDeviceID string,
+	recipientDeviceID string,
+	artifactPath string,
+	clientCreatedAt string,
+) (client.SubmitRelaySpaceEnvelopeResponse, error) {
+	return SubmitRelaySpaceOpenMLSArtifactEnvelope(
+		c,
+		relaySpaceID,
+		senderDeviceID,
+		recipientDeviceID,
+		ArtifactKindKeyPackage,
+		artifactPath,
+		clientCreatedAt,
+	)
+}
+
+func SubmitRelaySpaceWelcomeEnvelope(
+	c client.CypherClient,
+	relaySpaceID string,
+	senderDeviceID string,
+	recipientDeviceID string,
+	artifactPath string,
+	clientCreatedAt string,
+) (client.SubmitRelaySpaceEnvelopeResponse, error) {
+	return SubmitRelaySpaceOpenMLSArtifactEnvelope(
+		c,
+		relaySpaceID,
+		senderDeviceID,
+		recipientDeviceID,
+		ArtifactKindWelcome,
+		artifactPath,
+		clientCreatedAt,
+	)
+}
+
+func RelaySpaceOpenMLSArtifactInbox(
+	c client.CypherClient,
+	relaySpaceID string,
+	deviceID string,
+	artifactKind string,
+) ([]client.RelaySpaceEnvelopeRecord, error) {
+	if strings.TrimSpace(relaySpaceID) == "" {
+		return nil, errors.New("relay_space_id is required")
+	}
+	if strings.TrimSpace(deviceID) == "" {
+		return nil, errors.New("device_id is required")
+	}
+
+	contentType, err := ContentTypeForArtifactKind(artifactKind)
+	if err != nil {
+		return nil, err
+	}
+
+	inbox, err := c.RelaySpaceInbox(relaySpaceID, deviceID)
+	if err != nil {
+		return nil, err
+	}
+
+	filtered := make([]client.RelaySpaceEnvelopeRecord, 0, len(inbox.Envelopes))
+	for _, envelope := range inbox.Envelopes {
+		if envelope.ContentType == contentType {
+			filtered = append(filtered, envelope)
+		}
+	}
+
+	return filtered, nil
+}
+
+func WriteRelaySpaceKeyPackageFromEnvelope(outputPath string, envelope client.RelaySpaceEnvelopeRecord) error {
+	if envelope.ContentType != ContentTypeOpenMLSKeyPackage {
+		return fmt.Errorf("unsupported KeyPackage content_type: %s", envelope.ContentType)
+	}
+
+	return WriteOpenMLSArtifactFromRelaySpaceEnvelope(outputPath, envelope)
+}
+
+func WriteRelaySpaceWelcomeFromEnvelope(outputPath string, envelope client.RelaySpaceEnvelopeRecord) error {
+	if envelope.ContentType != ContentTypeOpenMLSWelcome {
+		return fmt.Errorf("unsupported Welcome content_type: %s", envelope.ContentType)
+	}
+
+	return WriteOpenMLSArtifactFromRelaySpaceEnvelope(outputPath, envelope)
+}
+
 func WriteOpenMLSArtifactFromRelaySpaceEnvelope(outputPath string, envelope client.RelaySpaceEnvelopeRecord) error {
 	if strings.TrimSpace(envelope.RelaySpaceID) == "" {
 		return errors.New("relay_space_id is required")
