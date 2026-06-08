@@ -4,9 +4,11 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"git.bitcrusher32.win/bitcrusher32/carbonstack-comms/internal/client"
@@ -67,6 +69,68 @@ func WriteOpenMLSArtifactFromEnvelope(outputPath string, envelope client.Envelop
 	}
 
 	return os.WriteFile(outputPath, decoded, 0o600)
+}
+
+func SubmitRelaySpaceOpenMLSArtifactEnvelope(
+	c client.CypherClient,
+	relaySpaceID string,
+	senderDeviceID string,
+	recipientDeviceID string,
+	artifactKind string,
+	artifactPath string,
+	clientCreatedAt string,
+) (client.SubmitRelaySpaceEnvelopeResponse, error) {
+	if strings.TrimSpace(relaySpaceID) == "" {
+		return client.SubmitRelaySpaceEnvelopeResponse{}, errors.New("relay_space_id is required")
+	}
+
+	contentType, err := ContentTypeForArtifactKind(artifactKind)
+	if err != nil {
+		return client.SubmitRelaySpaceEnvelopeResponse{}, err
+	}
+
+	payloadB64, err := ReadArtifactPayloadBase64(artifactPath)
+	if err != nil {
+		return client.SubmitRelaySpaceEnvelopeResponse{}, err
+	}
+
+	if clientCreatedAt == "" {
+		clientCreatedAt = time.Now().UTC().Format(time.RFC3339)
+	}
+
+	return c.SubmitRelaySpaceEnvelope(
+		relaySpaceID,
+		senderDeviceID,
+		recipientDeviceID,
+		contentType,
+		ProtocolVersionOpenMLSSidecar,
+		payloadB64,
+		clientCreatedAt,
+	)
+}
+
+func WriteOpenMLSArtifactFromRelaySpaceEnvelope(outputPath string, envelope client.RelaySpaceEnvelopeRecord) error {
+	if strings.TrimSpace(envelope.RelaySpaceID) == "" {
+		return errors.New("relay_space_id is required")
+	}
+
+	return WriteOpenMLSArtifactFromEnvelope(outputPath, relaySpaceEnvelopeToEnvelopeRecord(envelope))
+}
+
+func relaySpaceEnvelopeToEnvelopeRecord(envelope client.RelaySpaceEnvelopeRecord) client.EnvelopeRecord {
+	return client.EnvelopeRecord{
+		EnvelopeID:        envelope.EnvelopeID,
+		SenderDeviceID:    envelope.SenderDeviceID,
+		RecipientDeviceID: envelope.RecipientDeviceID,
+		ContentType:       envelope.ContentType,
+		ProtocolVersion:   envelope.ProtocolVersion,
+		CiphertextB64:     envelope.CiphertextB64,
+		PayloadSHA256:     envelope.PayloadSHA256,
+		PayloadSizeBytes:  envelope.PayloadSizeBytes,
+		ClientCreatedAt:   envelope.ClientCreatedAt,
+		ServerReceivedAt:  envelope.ServerReceivedAt,
+		DeliveryState:     envelope.DeliveryState,
+	}
 }
 
 func isOpenMLSArtifactContentType(contentType string) bool {

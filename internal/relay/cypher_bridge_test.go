@@ -188,3 +188,195 @@ func TestWriteOpenMLSArtifactFromEnvelopeRejectsPayloadSHA256Mismatch(t *testing
 		t.Fatalf("expected payload_sha256 mismatch error, got %v", err)
 	}
 }
+
+func TestSubmitRelaySpaceOpenMLSArtifactEnvelopeUsesScopedCypherEnvelopeContract(t *testing.T) {
+	dir := t.TempDir()
+	artifactPath := filepath.Join(dir, "application-message.bin")
+	payload := []byte{0x10, 0x20, 0x30, 0x40, 0xfe, 0xff, 'r', 's'}
+
+	if err := os.WriteFile(artifactPath, payload, 0o600); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+
+	var captured map[string]string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want POST", r.Method)
+		}
+
+		if r.URL.Path != "/v0/relay-spaces/relay-space-1/envelopes" {
+			t.Fatalf("path = %s, want /v0/relay-spaces/relay-space-1/envelopes", r.URL.Path)
+		}
+
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request body: %v", err)
+		}
+
+		if err := json.Unmarshal(body, &captured); err != nil {
+			t.Fatalf("decode request body: %v\\n%s", err, string(body))
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{
+"envelope_id":"relay-space-envelope-1",
+"relay_space_id":"relay-space-1",
+"server_received_at":"2026-06-08T00:00:00Z",
+"delivery_state":"queued",
+"payload_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+"payload_size_bytes":8
+}`))
+	}))
+	defer server.Close()
+
+	c := client.New(strings.TrimRight(server.URL, "/"))
+
+	resp, err := SubmitRelaySpaceOpenMLSArtifactEnvelope(
+		c,
+		"relay-space-1",
+		"alice-device-id",
+		"bob-device-id",
+		ArtifactKindApplicationMessage,
+		artifactPath,
+		"2026-06-08T00:00:00Z",
+	)
+	if err != nil {
+		t.Fatalf("SubmitRelaySpaceOpenMLSArtifactEnvelope: %v", err)
+	}
+
+	if resp.EnvelopeID != "relay-space-envelope-1" {
+		t.Fatalf("envelope_id = %q, want relay-space-envelope-1", resp.EnvelopeID)
+	}
+	if resp.RelaySpaceID != "relay-space-1" {
+		t.Fatalf("relay_space_id = %q, want relay-space-1", resp.RelaySpaceID)
+	}
+
+	if captured["sender_device_id"] != "alice-device-id" {
+		t.Fatalf("sender_device_id = %q", captured["sender_device_id"])
+	}
+	if captured["recipient_device_id"] != "bob-device-id" {
+		t.Fatalf("recipient_device_id = %q", captured["recipient_device_id"])
+	}
+	if captured["content_type"] != ContentTypeOpenMLSApplicationMessage {
+		t.Fatalf("content_type = %q, want %q", captured["content_type"], ContentTypeOpenMLSApplicationMessage)
+	}
+	if captured["protocol_version"] != ProtocolVersionOpenMLSSidecar {
+		t.Fatalf("protocol_version = %q, want %q", captured["protocol_version"], ProtocolVersionOpenMLSSidecar)
+	}
+	if captured["ciphertext_b64"] != EncodePayloadBase64(payload) {
+		t.Fatalf("ciphertext_b64 did not match encoded artifact payload")
+	}
+	if captured["client_created_at"] != "2026-06-08T00:00:00Z" {
+		t.Fatalf("client_created_at = %q", captured["client_created_at"])
+	}
+}
+
+func TestSubmitRelaySpaceOpenMLSArtifactEnvelopeRejectsMissingRelaySpaceID(t *testing.T) {
+	dir := t.TempDir()
+	artifactPath := filepath.Join(dir, "application-message.bin")
+
+	if err := os.WriteFile(artifactPath, []byte("payload"), 0o600); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+
+	c := client.New("http://127.0.0.1:1")
+
+	_, err := SubmitRelaySpaceOpenMLSArtifactEnvelope(
+		c,
+		"",
+		"alice-device-id",
+		"bob-device-id",
+		ArtifactKindApplicationMessage,
+		artifactPath,
+		"2026-06-08T00:00:00Z",
+	)
+	if err == nil {
+		t.Fatal("expected relay_space_id required error")
+	}
+	if !strings.Contains(err.Error(), "relay_space_id is required") {
+		t.Fatalf("expected relay_space_id required error, got %v", err)
+	}
+}
+
+func TestSubmitRelaySpaceOpenMLSArtifactEnvelopeRejectsUnsupportedKind(t *testing.T) {
+	dir := t.TempDir()
+	artifactPath := filepath.Join(dir, "signer.json")
+
+	if err := os.WriteFile(artifactPath, []byte("do not relay"), 0o600); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+
+	c := client.New("http://127.0.0.1:1")
+
+	_, err := SubmitRelaySpaceOpenMLSArtifactEnvelope(
+		c,
+		"relay-space-1",
+		"alice-device-id",
+		"bob-device-id",
+		"signer.json",
+		artifactPath,
+		"2026-06-08T00:00:00Z",
+	)
+	if err == nil {
+		t.Fatal("expected unsupported artifact kind error")
+	}
+	if !strings.Contains(err.Error(), ErrUnsupportedArtifactKind.Error()) {
+		t.Fatalf("expected unsupported artifact kind error, got %v", err)
+	}
+}
+
+func TestWriteOpenMLSArtifactFromRelaySpaceEnvelope(t *testing.T) {
+	dir := t.TempDir()
+	outputPath := filepath.Join(dir, "downloaded", "application-message.bin")
+
+	want := []byte{0x00, 0x01, 0x02, 0xfe, 0xff, 'm', 'l', 's', 'r', 's'}
+	payloadSHA256, payloadSizeBytes := payloadMetadataForTest(want)
+	envelope := client.RelaySpaceEnvelopeRecord{
+		EnvelopeID:        "relay-space-envelope-1",
+		RelaySpaceID:      "relay-space-1",
+		SenderDeviceID:    "alice-device-id",
+		RecipientDeviceID: "bob-device-id",
+		ContentType:       ContentTypeOpenMLSApplicationMessage,
+		ProtocolVersion:   ProtocolVersionOpenMLSSidecar,
+		CiphertextB64:     EncodePayloadBase64(want),
+		PayloadSHA256:     payloadSHA256,
+		PayloadSizeBytes:  payloadSizeBytes,
+		DeliveryState:     "queued",
+	}
+
+	if err := WriteOpenMLSArtifactFromRelaySpaceEnvelope(outputPath, envelope); err != nil {
+		t.Fatalf("WriteOpenMLSArtifactFromRelaySpaceEnvelope: %v", err)
+	}
+
+	got, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("read written artifact: %v", err)
+	}
+
+	if !bytes.Equal(got, want) {
+		t.Fatalf("artifact bytes = %x, want %x", got, want)
+	}
+}
+
+func TestWriteOpenMLSArtifactFromRelaySpaceEnvelopeRejectsMissingRelaySpaceID(t *testing.T) {
+	payload := []byte("missing relay space id")
+	payloadSHA256, payloadSizeBytes := payloadMetadataForTest(payload)
+
+	envelope := client.RelaySpaceEnvelopeRecord{
+		ContentType:      ContentTypeOpenMLSApplicationMessage,
+		ProtocolVersion:  ProtocolVersionOpenMLSSidecar,
+		CiphertextB64:    EncodePayloadBase64(payload),
+		PayloadSHA256:    payloadSHA256,
+		PayloadSizeBytes: payloadSizeBytes,
+	}
+
+	err := WriteOpenMLSArtifactFromRelaySpaceEnvelope(filepath.Join(t.TempDir(), "artifact.bin"), envelope)
+	if err == nil {
+		t.Fatal("expected relay_space_id required error")
+	}
+	if !strings.Contains(err.Error(), "relay_space_id is required") {
+		t.Fatalf("expected relay_space_id required error, got %v", err)
+	}
+}
