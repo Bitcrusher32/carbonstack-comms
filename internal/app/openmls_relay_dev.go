@@ -19,6 +19,9 @@ var submitRelaySpaceWelcomeEnvelopeForCommand = relay.SubmitRelaySpaceWelcomeEnv
 var relaySpaceOpenMLSArtifactInboxForCommand = relay.RelaySpaceOpenMLSArtifactInbox
 var writeRelaySpaceKeyPackageFromEnvelopeForCommand = relay.WriteRelaySpaceKeyPackageFromEnvelope
 var writeRelaySpaceWelcomeFromEnvelopeForCommand = relay.WriteRelaySpaceWelcomeFromEnvelope
+var ackRelaySpaceEnvelopeForCommand = func(c client.CypherClient, relaySpaceID string, envelopeID string, recipientDeviceID string) (client.AckRelaySpaceEnvelopeResponse, error) {
+	return c.AckRelaySpaceEnvelope(relaySpaceID, envelopeID, recipientDeviceID)
+}
 
 func cmdOpenMLSRelayKeyPackageSubmitDev(args []string) error {
 	fs := flag.NewFlagSet("openmls-relay-keypackage-submit-dev", flag.ExitOnError)
@@ -406,6 +409,101 @@ func cmdOpenMLSRelayAddMemberDev(args []string) error {
 	bootstrapPrintOptionalString("epoch_before", envelope.Data)
 	bootstrapPrintOptionalString("epoch_after", envelope.Data)
 	fmt.Println("warning: dev/pre-alpha Relay Space add-member scaffold; not join automation, identity verification, local-backbone, or production UX")
+	return nil
+}
+
+func cmdOpenMLSRelayJoinDev(args []string) error {
+	fs := flag.NewFlagSet("openmls-relay-join-dev", flag.ExitOnError)
+	statePath := fs.String("state", state.DefaultStatePath, "local state file path")
+	relaySpaceID := fs.String("relay-space", "", "Relay Space ID")
+	sidecarDir := fs.String("sidecar-dir", defaultOpenMLSSidecarDir, "OpenMLS sidecar directory")
+	sidecarDeviceLabel := fs.String("sidecar-device-label", "", "OpenMLS sidecar device label")
+	conversationLabel := fs.String("conversation", "", "OpenMLS sidecar conversation label")
+	ackAfterJoin := fs.Bool("ack-after-join", false, "ack the Relay Space Welcome envelope only after sidecar conversation-join succeeds")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	if strings.TrimSpace(*relaySpaceID) == "" || strings.TrimSpace(*sidecarDeviceLabel) == "" || strings.TrimSpace(*conversationLabel) == "" {
+		return errors.New("--relay-space, --sidecar-device-label, and --conversation are required")
+	}
+
+	s, err := state.RequireReadyDevice(*statePath)
+	if err != nil {
+		return err
+	}
+
+	c := client.New(s.ServerURL)
+	envelopes, err := relaySpaceOpenMLSArtifactInboxForCommand(c, *relaySpaceID, s.DeviceID, relay.ArtifactKindWelcome)
+	if err != nil {
+		return err
+	}
+	if len(envelopes) == 0 {
+		return errors.New("no Relay Space Welcome envelopes available for join")
+	}
+
+	welcomeEnvelope := envelopes[0]
+	welcomePath, err := writeRelayWelcomeInboxDevArtifact(welcomeEnvelope, 0)
+	if err != nil {
+		return fmt.Errorf("write Relay Space Welcome artifact: %w", err)
+	}
+
+	envelope, err := runOpenMLSBootstrapSidecarForCommand(
+		*sidecarDir,
+		"conversation-join",
+		"--device-label", *sidecarDeviceLabel,
+		"--conversation-label", *conversationLabel,
+		"--welcome", welcomePath,
+	)
+	if err != nil {
+		return err
+	}
+
+	var ackResp client.AckRelaySpaceEnvelopeResponse
+	if *ackAfterJoin {
+		ackResp, err = ackRelaySpaceEnvelopeForCommand(c, *relaySpaceID, welcomeEnvelope.EnvelopeID, s.DeviceID)
+		if err != nil {
+			return fmt.Errorf("ack Relay Space Welcome after join: %w", err)
+		}
+	}
+
+	deviceLabel := bootstrapStringField(envelope.Data, "device_label")
+	if deviceLabel == "" {
+		deviceLabel = *sidecarDeviceLabel
+	}
+	conversation := bootstrapStringField(envelope.Data, "conversation_label")
+	if conversation == "" {
+		conversation = *conversationLabel
+	}
+
+	fmt.Println("openmls relay join dev")
+	fmt.Println("command: openmls-relay-join-dev")
+	fmt.Println("status: joined")
+	fmt.Printf("relay_space_id: %s\n", *relaySpaceID)
+	fmt.Printf("local_device_id: %s\n", s.DeviceID)
+	fmt.Printf("welcome_envelope_id: %s\n", welcomeEnvelope.EnvelopeID)
+	fmt.Printf("welcome_from_device: %s\n", welcomeEnvelope.SenderDeviceID)
+	fmt.Printf("welcome_artifact_path: %s\n", welcomePath)
+	fmt.Printf("sidecar_command: %s\n", envelope.Command)
+	fmt.Printf("sidecar_device_label: %s\n", deviceLabel)
+	fmt.Printf("sidecar_conversation_label: %s\n", conversation)
+	fmt.Printf("ack_requested: %t\n", *ackAfterJoin)
+	fmt.Printf("welcome_acked: %t\n", *ackAfterJoin)
+	if *ackAfterJoin {
+		fmt.Printf("ack_envelope_id: %s\n", ackResp.EnvelopeID)
+		fmt.Printf("ack_delivery_state: %s\n", ackResp.DeliveryState)
+		fmt.Printf("acknowledged_at: %s\n", ackResp.AcknowledgedAt)
+	}
+	bootstrapPrintOptionalString("welcome_artifact_path_hint", envelope.Data)
+	bootstrapPrintOptionalBool("joined", envelope.Data)
+	bootstrapPrintOptionalBool("group_reloadable", envelope.Data)
+	bootstrapPrintOptionalNumber("member_count", envelope.Data)
+	bootstrapPrintOptionalString("epoch", envelope.Data)
+	bootstrapPrintOptionalString("join_summary_path_hint", envelope.Data)
+	bootstrapPrintOptionalString("conversation_state_path_hint", envelope.Data)
+	bootstrapPrintOptionalString("conversation_summary_path_hint", envelope.Data)
+	bootstrapPrintOptionalString("provider_storage_path_hint", envelope.Data)
+	fmt.Println("warning: dev/pre-alpha Relay Space join scaffold; not identity verification, local-backbone, or production UX")
 	return nil
 }
 

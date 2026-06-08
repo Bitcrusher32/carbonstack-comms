@@ -757,3 +757,383 @@ func TestOpenMLSRelayAddMemberDevRejectsMissingWelcomeHint(t *testing.T) {
 		t.Fatalf("expected missing welcome hint error, got %v", err)
 	}
 }
+
+func TestOpenMLSRelayJoinDevRequiresCoreArgs(t *testing.T) {
+	err := cmdOpenMLSRelayJoinDev([]string{
+		"--relay-space", "relay-space-1",
+		"--sidecar-device-label", "bob-sidecar",
+	})
+	if err == nil || !strings.Contains(err.Error(), "--relay-space, --sidecar-device-label, and --conversation are required") {
+		t.Fatalf("expected required join args error, got %v", err)
+	}
+}
+
+func TestOpenMLSRelayJoinDevWritesWelcomeRunsSidecarWithoutAckByDefault(t *testing.T) {
+	statePath := writeRelayCommandState(t)
+
+	oldInbox := relaySpaceOpenMLSArtifactInboxForCommand
+	oldWrite := writeRelaySpaceWelcomeFromEnvelopeForCommand
+	oldRun := runOpenMLSBootstrapSidecarForCommand
+	oldAck := ackRelaySpaceEnvelopeForCommand
+	defer func() {
+		relaySpaceOpenMLSArtifactInboxForCommand = oldInbox
+		writeRelaySpaceWelcomeFromEnvelopeForCommand = oldWrite
+		runOpenMLSBootstrapSidecarForCommand = oldRun
+		ackRelaySpaceEnvelopeForCommand = oldAck
+	}()
+
+	var gotInboxRelaySpaceID string
+	var gotInboxDeviceID string
+	var gotInboxArtifactKind string
+
+	relaySpaceOpenMLSArtifactInboxForCommand = func(c client.CypherClient, relaySpaceID string, deviceID string, artifactKind string) ([]client.RelaySpaceEnvelopeRecord, error) {
+		gotInboxRelaySpaceID = relaySpaceID
+		gotInboxDeviceID = deviceID
+		gotInboxArtifactKind = artifactKind
+		return []client.RelaySpaceEnvelopeRecord{
+			{
+				EnvelopeID:        "welcome-envelope-1",
+				RelaySpaceID:      relaySpaceID,
+				SenderDeviceID:    "alice-device-id",
+				RecipientDeviceID: deviceID,
+				ContentType:       relay.ContentTypeOpenMLSWelcome,
+				ProtocolVersion:   relay.ProtocolVersionOpenMLSSidecar,
+			},
+		}, nil
+	}
+
+	var wroteEnvelopeID string
+	var wroteOutputPath string
+
+	writeRelaySpaceWelcomeFromEnvelopeForCommand = func(outputPath string, envelope client.RelaySpaceEnvelopeRecord) error {
+		wroteOutputPath = outputPath
+		wroteEnvelopeID = envelope.EnvelopeID
+		return nil
+	}
+
+	var gotSidecarDir string
+	var gotSidecarCommand string
+	var gotSidecarArgs []string
+
+	runOpenMLSBootstrapSidecarForCommand = func(sidecarDir string, sidecarCommand string, args ...string) (openMLSSidecarBootstrapEnvelope, error) {
+		gotSidecarDir = sidecarDir
+		gotSidecarCommand = sidecarCommand
+		gotSidecarArgs = append([]string{}, args...)
+		return openMLSSidecarBootstrapEnvelope{
+			OK:      true,
+			Command: "conversation-join",
+			Data: map[string]any{
+				"device_label":                   "bob-sidecar",
+				"conversation_label":             "test-conversation",
+				"welcome_artifact_path_hint":     ".carbonstack-openmls-sidecar-state/dev/devices/bob-sidecar/conversations/test-conversation/welcome.bin",
+				"joined":                         true,
+				"group_reloadable":               true,
+				"member_count":                   float64(2),
+				"epoch":                          "GroupEpoch(1)",
+				"join_summary_path_hint":         ".carbonstack-openmls-sidecar-state/dev/devices/bob-sidecar/conversations/test-conversation/join-summary.json",
+				"conversation_state_path_hint":   ".carbonstack-openmls-sidecar-state/dev/devices/bob-sidecar/conversations/test-conversation/conversation.bin",
+				"conversation_summary_path_hint": ".carbonstack-openmls-sidecar-state/dev/devices/bob-sidecar/conversations/test-conversation/summary.json",
+				"provider_storage_path_hint":     ".carbonstack-openmls-sidecar-state/dev/devices/bob-sidecar/provider-storage",
+			},
+		}, nil
+	}
+
+	ackCalled := false
+	ackRelaySpaceEnvelopeForCommand = func(c client.CypherClient, relaySpaceID string, envelopeID string, recipientDeviceID string) (client.AckRelaySpaceEnvelopeResponse, error) {
+		ackCalled = true
+		return client.AckRelaySpaceEnvelopeResponse{}, nil
+	}
+
+	out, err := captureOpenMLSBootstrapOutput(func() error {
+		return cmdOpenMLSRelayJoinDev([]string{
+			"--state", statePath,
+			"--relay-space", "relay-space-1",
+			"--sidecar-dir", "sidecar-test-dir",
+			"--sidecar-device-label", "bob-sidecar",
+			"--conversation", "test-conversation",
+		})
+	})
+	if err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+
+	if gotInboxRelaySpaceID != "relay-space-1" {
+		t.Fatalf("inbox relay_space_id = %q", gotInboxRelaySpaceID)
+	}
+	if gotInboxDeviceID != "local-device-id" {
+		t.Fatalf("inbox device_id = %q", gotInboxDeviceID)
+	}
+	if gotInboxArtifactKind != relay.ArtifactKindWelcome {
+		t.Fatalf("inbox artifact kind = %q", gotInboxArtifactKind)
+	}
+	if wroteEnvelopeID != "welcome-envelope-1" {
+		t.Fatalf("wrote envelope = %q", wroteEnvelopeID)
+	}
+	if !strings.Contains(wroteOutputPath, "welcome.bin") {
+		t.Fatalf("unexpected welcome output path: %q", wroteOutputPath)
+	}
+
+	if gotSidecarDir != "sidecar-test-dir" {
+		t.Fatalf("sidecar dir = %q", gotSidecarDir)
+	}
+	if gotSidecarCommand != "conversation-join" {
+		t.Fatalf("sidecar command = %q", gotSidecarCommand)
+	}
+	if strings.Join(gotSidecarArgs[:4], " ") != "--device-label bob-sidecar --conversation-label test-conversation" {
+		t.Fatalf("unexpected leading sidecar args: %q", strings.Join(gotSidecarArgs, " "))
+	}
+	if gotSidecarArgs[4] != "--welcome" {
+		t.Fatalf("expected welcome flag, got args: %q", strings.Join(gotSidecarArgs, " "))
+	}
+	if gotSidecarArgs[5] != wroteOutputPath {
+		t.Fatalf("welcome path = %q, want %q", gotSidecarArgs[5], wroteOutputPath)
+	}
+	if ackCalled {
+		t.Fatal("ack should not be called without --ack-after-join")
+	}
+
+	for _, want := range []string{
+		"command: openmls-relay-join-dev",
+		"status: joined",
+		"relay_space_id: relay-space-1",
+		"local_device_id: local-device-id",
+		"welcome_envelope_id: welcome-envelope-1",
+		"welcome_from_device: alice-device-id",
+		"sidecar_command: conversation-join",
+		"sidecar_device_label: bob-sidecar",
+		"sidecar_conversation_label: test-conversation",
+		"ack_requested: false",
+		"welcome_acked: false",
+		"joined: true",
+		"group_reloadable: true",
+		"member_count: 2",
+		"epoch: GroupEpoch(1)",
+		"warning: dev/pre-alpha Relay Space join scaffold; not identity verification, local-backbone, or production UX",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected output to contain %q, got:\n%s", want, out)
+		}
+	}
+}
+
+func TestOpenMLSRelayJoinDevAcksOnlyAfterJoinSuccessWhenRequested(t *testing.T) {
+	statePath := writeRelayCommandState(t)
+
+	oldInbox := relaySpaceOpenMLSArtifactInboxForCommand
+	oldWrite := writeRelaySpaceWelcomeFromEnvelopeForCommand
+	oldRun := runOpenMLSBootstrapSidecarForCommand
+	oldAck := ackRelaySpaceEnvelopeForCommand
+	defer func() {
+		relaySpaceOpenMLSArtifactInboxForCommand = oldInbox
+		writeRelaySpaceWelcomeFromEnvelopeForCommand = oldWrite
+		runOpenMLSBootstrapSidecarForCommand = oldRun
+		ackRelaySpaceEnvelopeForCommand = oldAck
+	}()
+
+	relaySpaceOpenMLSArtifactInboxForCommand = func(c client.CypherClient, relaySpaceID string, deviceID string, artifactKind string) ([]client.RelaySpaceEnvelopeRecord, error) {
+		return []client.RelaySpaceEnvelopeRecord{
+			{
+				EnvelopeID:        "welcome-envelope-1",
+				RelaySpaceID:      relaySpaceID,
+				SenderDeviceID:    "alice-device-id",
+				RecipientDeviceID: deviceID,
+				ContentType:       relay.ContentTypeOpenMLSWelcome,
+				ProtocolVersion:   relay.ProtocolVersionOpenMLSSidecar,
+			},
+		}, nil
+	}
+
+	writeRelaySpaceWelcomeFromEnvelopeForCommand = func(outputPath string, envelope client.RelaySpaceEnvelopeRecord) error {
+		return nil
+	}
+
+	runOpenMLSBootstrapSidecarForCommand = func(sidecarDir string, sidecarCommand string, args ...string) (openMLSSidecarBootstrapEnvelope, error) {
+		return openMLSSidecarBootstrapEnvelope{
+			OK:      true,
+			Command: "conversation-join",
+			Data: map[string]any{
+				"device_label":       "bob-sidecar",
+				"conversation_label": "test-conversation",
+				"joined":             true,
+				"group_reloadable":   true,
+				"member_count":       float64(2),
+				"epoch":              "GroupEpoch(1)",
+			},
+		}, nil
+	}
+
+	var gotAckRelaySpaceID string
+	var gotAckEnvelopeID string
+	var gotAckRecipientDeviceID string
+
+	ackRelaySpaceEnvelopeForCommand = func(c client.CypherClient, relaySpaceID string, envelopeID string, recipientDeviceID string) (client.AckRelaySpaceEnvelopeResponse, error) {
+		gotAckRelaySpaceID = relaySpaceID
+		gotAckEnvelopeID = envelopeID
+		gotAckRecipientDeviceID = recipientDeviceID
+		return client.AckRelaySpaceEnvelopeResponse{
+			EnvelopeID:     envelopeID,
+			RelaySpaceID:   relaySpaceID,
+			DeliveryState:  "acknowledged",
+			AcknowledgedAt: "2026-06-08T00:03:00Z",
+		}, nil
+	}
+
+	out, err := captureOpenMLSBootstrapOutput(func() error {
+		return cmdOpenMLSRelayJoinDev([]string{
+			"--state", statePath,
+			"--relay-space", "relay-space-1",
+			"--sidecar-device-label", "bob-sidecar",
+			"--conversation", "test-conversation",
+			"--ack-after-join",
+		})
+	})
+	if err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+
+	if gotAckRelaySpaceID != "relay-space-1" {
+		t.Fatalf("ack relay_space_id = %q", gotAckRelaySpaceID)
+	}
+	if gotAckEnvelopeID != "welcome-envelope-1" {
+		t.Fatalf("ack envelope_id = %q", gotAckEnvelopeID)
+	}
+	if gotAckRecipientDeviceID != "local-device-id" {
+		t.Fatalf("ack recipient_device_id = %q", gotAckRecipientDeviceID)
+	}
+
+	for _, want := range []string{
+		"ack_requested: true",
+		"welcome_acked: true",
+		"ack_envelope_id: welcome-envelope-1",
+		"ack_delivery_state: acknowledged",
+		"acknowledged_at: 2026-06-08T00:03:00Z",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected output to contain %q, got:\n%s", want, out)
+		}
+	}
+}
+
+func TestOpenMLSRelayJoinDevDoesNotAckWhenSidecarJoinFails(t *testing.T) {
+	statePath := writeRelayCommandState(t)
+
+	oldInbox := relaySpaceOpenMLSArtifactInboxForCommand
+	oldWrite := writeRelaySpaceWelcomeFromEnvelopeForCommand
+	oldRun := runOpenMLSBootstrapSidecarForCommand
+	oldAck := ackRelaySpaceEnvelopeForCommand
+	defer func() {
+		relaySpaceOpenMLSArtifactInboxForCommand = oldInbox
+		writeRelaySpaceWelcomeFromEnvelopeForCommand = oldWrite
+		runOpenMLSBootstrapSidecarForCommand = oldRun
+		ackRelaySpaceEnvelopeForCommand = oldAck
+	}()
+
+	relaySpaceOpenMLSArtifactInboxForCommand = func(c client.CypherClient, relaySpaceID string, deviceID string, artifactKind string) ([]client.RelaySpaceEnvelopeRecord, error) {
+		return []client.RelaySpaceEnvelopeRecord{
+			{
+				EnvelopeID:      "welcome-envelope-1",
+				RelaySpaceID:    relaySpaceID,
+				SenderDeviceID:  "alice-device-id",
+				ContentType:     relay.ContentTypeOpenMLSWelcome,
+				ProtocolVersion: relay.ProtocolVersionOpenMLSSidecar,
+			},
+		}, nil
+	}
+
+	writeRelaySpaceWelcomeFromEnvelopeForCommand = func(outputPath string, envelope client.RelaySpaceEnvelopeRecord) error {
+		return nil
+	}
+
+	runOpenMLSBootstrapSidecarForCommand = func(sidecarDir string, sidecarCommand string, args ...string) (openMLSSidecarBootstrapEnvelope, error) {
+		return openMLSSidecarBootstrapEnvelope{}, errors.New("sidecar join failed")
+	}
+
+	ackCalled := false
+	ackRelaySpaceEnvelopeForCommand = func(c client.CypherClient, relaySpaceID string, envelopeID string, recipientDeviceID string) (client.AckRelaySpaceEnvelopeResponse, error) {
+		ackCalled = true
+		return client.AckRelaySpaceEnvelopeResponse{}, nil
+	}
+
+	err := cmdOpenMLSRelayJoinDev([]string{
+		"--state", statePath,
+		"--relay-space", "relay-space-1",
+		"--sidecar-device-label", "bob-sidecar",
+		"--conversation", "test-conversation",
+		"--ack-after-join",
+	})
+	if err == nil || !strings.Contains(err.Error(), "sidecar join failed") {
+		t.Fatalf("expected sidecar join failure, got %v", err)
+	}
+	if ackCalled {
+		t.Fatal("ack should not be called when sidecar join fails")
+	}
+}
+
+func TestOpenMLSRelayJoinDevDoesNotAckWhenWelcomeWriteFails(t *testing.T) {
+	statePath := writeRelayCommandState(t)
+
+	oldInbox := relaySpaceOpenMLSArtifactInboxForCommand
+	oldWrite := writeRelaySpaceWelcomeFromEnvelopeForCommand
+	oldAck := ackRelaySpaceEnvelopeForCommand
+	defer func() {
+		relaySpaceOpenMLSArtifactInboxForCommand = oldInbox
+		writeRelaySpaceWelcomeFromEnvelopeForCommand = oldWrite
+		ackRelaySpaceEnvelopeForCommand = oldAck
+	}()
+
+	relaySpaceOpenMLSArtifactInboxForCommand = func(c client.CypherClient, relaySpaceID string, deviceID string, artifactKind string) ([]client.RelaySpaceEnvelopeRecord, error) {
+		return []client.RelaySpaceEnvelopeRecord{
+			{
+				EnvelopeID:      "welcome-envelope-1",
+				RelaySpaceID:    relaySpaceID,
+				ContentType:     relay.ContentTypeOpenMLSWelcome,
+				ProtocolVersion: relay.ProtocolVersionOpenMLSSidecar,
+			},
+		}, nil
+	}
+
+	writeRelaySpaceWelcomeFromEnvelopeForCommand = func(outputPath string, envelope client.RelaySpaceEnvelopeRecord) error {
+		return errors.New("welcome write failed")
+	}
+
+	ackCalled := false
+	ackRelaySpaceEnvelopeForCommand = func(c client.CypherClient, relaySpaceID string, envelopeID string, recipientDeviceID string) (client.AckRelaySpaceEnvelopeResponse, error) {
+		ackCalled = true
+		return client.AckRelaySpaceEnvelopeResponse{}, nil
+	}
+
+	err := cmdOpenMLSRelayJoinDev([]string{
+		"--state", statePath,
+		"--relay-space", "relay-space-1",
+		"--sidecar-device-label", "bob-sidecar",
+		"--conversation", "test-conversation",
+		"--ack-after-join",
+	})
+	if err == nil || !strings.Contains(err.Error(), "write Relay Space Welcome artifact") {
+		t.Fatalf("expected welcome write failure, got %v", err)
+	}
+	if ackCalled {
+		t.Fatal("ack should not be called when Welcome write fails")
+	}
+}
+
+func TestOpenMLSRelayJoinDevRejectsNoWelcomeEnvelopes(t *testing.T) {
+	statePath := writeRelayCommandState(t)
+
+	oldInbox := relaySpaceOpenMLSArtifactInboxForCommand
+	defer func() { relaySpaceOpenMLSArtifactInboxForCommand = oldInbox }()
+
+	relaySpaceOpenMLSArtifactInboxForCommand = func(c client.CypherClient, relaySpaceID string, deviceID string, artifactKind string) ([]client.RelaySpaceEnvelopeRecord, error) {
+		return nil, nil
+	}
+
+	err := cmdOpenMLSRelayJoinDev([]string{
+		"--state", statePath,
+		"--relay-space", "relay-space-1",
+		"--sidecar-device-label", "bob-sidecar",
+		"--conversation", "test-conversation",
+	})
+	if err == nil || !strings.Contains(err.Error(), "no Relay Space Welcome envelopes available for join") {
+		t.Fatalf("expected no Welcome envelopes error, got %v", err)
+	}
+}
