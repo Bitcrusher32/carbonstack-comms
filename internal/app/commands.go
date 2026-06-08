@@ -66,6 +66,14 @@ func Run(args []string) error {
 		return cmdOpenMLSConversationAddMemberDev(args[1:])
 	case "openmls-conversation-join-dev":
 		return cmdOpenMLSConversationJoinDev(args[1:])
+	case "openmls-relay-keypackage-submit-dev":
+		return cmdOpenMLSRelayKeyPackageSubmitDev(args[1:])
+	case "openmls-relay-keypackage-inbox-dev":
+		return cmdOpenMLSRelayKeyPackageInboxDev(args[1:])
+	case "openmls-relay-welcome-submit-dev":
+		return cmdOpenMLSRelayWelcomeSubmitDev(args[1:])
+	case "openmls-relay-welcome-inbox-dev":
+		return cmdOpenMLSRelayWelcomeInboxDev(args[1:])
 	default:
 		return fmt.Errorf("unknown command: %s", args[0])
 	}
@@ -98,6 +106,10 @@ func usage() {
 	fmt.Println("  openmls-conversation-load-check-dev")
 	fmt.Println("  openmls-conversation-add-member-dev")
 	fmt.Println("  openmls-conversation-join-dev")
+	fmt.Println("  openmls-relay-keypackage-submit-dev")
+	fmt.Println("  openmls-relay-keypackage-inbox-dev")
+	fmt.Println("  openmls-relay-welcome-submit-dev")
+	fmt.Println("  openmls-relay-welcome-inbox-dev")
 }
 
 func cmdInit(args []string) error {
