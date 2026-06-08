@@ -303,6 +303,14 @@ CarbonStackComms has a component-local planning record for future validation-pro
 
 Future validation must distinguish trust-bearing state, identity-bearing state, provider state, and generated/build artifacts. Cleanup is not recovery, provider observation is not verification, and validation success is not a production/security claim.
 
+## Local-backbone go/no-go boundary
+
+CarbonStackComms has a component-local boundary record for the v0.5.34 local-backbone go/no-go reassessment:
+
+    docs/22-local-backbone-go-no-go-boundary-v0.md
+
+The decision is only a conditional GO for first narrow implementation planning. It is not a GO for broad Comms provider live-flow, local-backbone validation, CLI/registry exposure, verified identity import, or trust mutation from provider observation.
+
 ## What is not implemented
 
 CarbonStackComms does not currently provide:
