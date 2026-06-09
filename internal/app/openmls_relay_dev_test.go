@@ -758,6 +758,83 @@ func TestOpenMLSRelayAddMemberDevRejectsMissingWelcomeHint(t *testing.T) {
 	}
 }
 
+func TestOpenMLSRelayAddMemberDevDoesNotSubmitWelcomeWhenSidecarAddMemberFails(t *testing.T) {
+	statePath := writeRelayCommandState(t)
+
+	oldInbox := relaySpaceOpenMLSArtifactInboxForCommand
+	oldWrite := writeRelaySpaceKeyPackageFromEnvelopeForCommand
+	oldRun := runOpenMLSBootstrapSidecarForCommand
+	oldSubmitWelcome := submitRelaySpaceWelcomeEnvelopeForCommand
+	defer func() {
+		relaySpaceOpenMLSArtifactInboxForCommand = oldInbox
+		writeRelaySpaceKeyPackageFromEnvelopeForCommand = oldWrite
+		runOpenMLSBootstrapSidecarForCommand = oldRun
+		submitRelaySpaceWelcomeEnvelopeForCommand = oldSubmitWelcome
+	}()
+
+	relaySpaceOpenMLSArtifactInboxForCommand = func(c client.CypherClient, relaySpaceID string, deviceID string, artifactKind string) ([]client.RelaySpaceEnvelopeRecord, error) {
+		return []client.RelaySpaceEnvelopeRecord{
+			{
+				EnvelopeID:        "keypackage-envelope-1",
+				RelaySpaceID:      relaySpaceID,
+				SenderDeviceID:    "bob-device-id",
+				RecipientDeviceID: deviceID,
+				ContentType:       relay.ContentTypeOpenMLSKeyPackage,
+				ProtocolVersion:   relay.ProtocolVersionOpenMLSSidecar,
+			},
+		}, nil
+	}
+
+	writeRelaySpaceKeyPackageFromEnvelopeForCommand = func(outputPath string, envelope client.RelaySpaceEnvelopeRecord) error {
+		if envelope.EnvelopeID != "keypackage-envelope-1" {
+			t.Fatalf("wrote envelope = %q", envelope.EnvelopeID)
+		}
+		return nil
+	}
+
+	var gotSidecarCommand string
+	runOpenMLSBootstrapSidecarForCommand = func(sidecarDir string, sidecarCommand string, args ...string) (openMLSSidecarBootstrapEnvelope, error) {
+		gotSidecarCommand = sidecarCommand
+		return openMLSSidecarBootstrapEnvelope{}, errors.New("sidecar add-member failed")
+	}
+
+	welcomeSubmitCalled := false
+	submitRelaySpaceWelcomeEnvelopeForCommand = func(c client.CypherClient, relaySpaceID string, senderDeviceID string, recipientDeviceID string, artifactPath string, clientCreatedAt string) (client.SubmitRelaySpaceEnvelopeResponse, error) {
+		welcomeSubmitCalled = true
+		return client.SubmitRelaySpaceEnvelopeResponse{}, nil
+	}
+
+	out, err := captureOpenMLSBootstrapOutput(func() error {
+		return cmdOpenMLSRelayAddMemberDev([]string{
+			"--state", statePath,
+			"--relay-space", "relay-space-1",
+			"--sidecar-dir", "sidecar-test-dir",
+			"--sidecar-device-label", "alice-sidecar",
+			"--conversation", "test-conversation",
+		})
+	})
+	if err == nil || !strings.Contains(err.Error(), "sidecar add-member failed") {
+		t.Fatalf("expected sidecar add-member failure, got %v", err)
+	}
+	if gotSidecarCommand != "conversation-add-member" {
+		t.Fatalf("sidecar command = %q", gotSidecarCommand)
+	}
+	if welcomeSubmitCalled {
+		t.Fatal("Welcome submit should not be called when sidecar add-member fails")
+	}
+	for _, forbidden := range []string{
+		"status: welcome_created_and_sent",
+		"welcome_envelope_id:",
+		"welcome_delivery_state:",
+		"keypackage_acked: false",
+		"welcome_acked: false",
+	} {
+		if strings.Contains(out, forbidden) {
+			t.Fatalf("output should not contain %q after sidecar failure, got:\n%s", forbidden, out)
+		}
+	}
+}
+
 func TestOpenMLSRelayJoinDevRequiresCoreArgs(t *testing.T) {
 	err := cmdOpenMLSRelayJoinDev([]string{
 		"--relay-space", "relay-space-1",
