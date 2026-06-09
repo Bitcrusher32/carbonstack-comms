@@ -10,99 +10,96 @@ It is not externally audited.
 
 It is not Android-ready.
 
-The current validated artifact is a development proof that CarbonStackComms can use an OpenMLS sidecar and CarbonStackCypher relay storage to complete a local OpenMLS relay lifecycle.
+It does not provide mature public send/inbox UX yet.
 
+## Source of truth
 
-_Related repositories: [carbonstack](https://git.bitcrusher32.win/bitcrusher32/carbonstack) / [carbonstack-cypher](https://git.bitcrusher32.win/bitcrusher32/carbonstack-cypher) / [carbonstack-os](https://git.bitcrusher32.win/bitcrusher32/carbonstack-os)_
+Use the main CarbonStack repository for public release framing, release assets, validation runbooks, roadmap state, and project-wide claim boundaries:
 
-## Current implemented role
+    https://git.bitcrusher32.win/bitcrusher32/carbonstack
+
+Related repositories:
+
+    https://git.bitcrusher32.win/bitcrusher32/carbonstack
+    https://git.bitcrusher32.win/bitcrusher32/carbonstack-cypher
+    https://git.bitcrusher32.win/bitcrusher32/carbonstack-os
+
+Gitea remains source of truth. GitHub mirrors may exist but are not release authority unless project policy changes.
+
+## Current role
 
 CarbonStackComms currently contains:
 
-- a text-first client scaffold;
-- a promoted OpenMLS development sidecar;
-- protocol tests for the OpenMLS sidecar lifecycle;
-- an internal relay helper for Cypher/OpenMLS artifact transport;
-- a real-Cypher smoke harness;
-- metadata validation before writing downloaded sidecar artifacts;
-- consume-then-ack proof boundaries.
+    text-first client scaffolding;
+    local state and trust-state packages;
+    dev/pre-alpha OpenMLS sidecar integration;
+    OpenMLS sidecar command tests;
+    Comms/Cypher relay helpers;
+    Relay Space client wrappers;
+    Relay Space OpenMLS artifact bridge helpers;
+    KeyPackage / Welcome / add-member / join dev commands;
+    dev runtime OpenMLS send/inbox commands;
+    trust/candidate/recovery helper packages;
+    command tests and smoke scripts.
 
-## Current validated relay path
+This is useful development evidence. It is not a finished secure messenger.
 
-The current proof validates:
+## Current OpenMLS / Relay Space dev surfaces
 
-1. Bob exports an OpenMLS KeyPackage artifact.
-2. Comms submits it to Cypher as an opaque envelope.
-3. Alice retrieves and writes the artifact.
-4. Alice consumes it through the OpenMLS sidecar and creates a Welcome.
-5. Comms submits the Welcome to Cypher.
-6. Bob retrieves and writes the Welcome.
-7. Bob consumes it through the sidecar.
-8. Alice creates an application-message artifact.
-9. Comms submits it to Cypher.
-10. Bob retrieves, validates metadata, writes, and consumes the application-message.
-11. The plaintext matches.
-12. Envelopes are acked only after sidecar consume succeeds.
+Current dev/pre-alpha surfaces include:
 
-This is a development proof. It is not a polished runtime UX.
+    openmls-send-dev
+    openmls-inbox-dev
+    openmls-relay-keypackage-submit-dev
+    openmls-relay-keypackage-inbox-dev
+    openmls-relay-welcome-inbox-dev
+    openmls-relay-add-member-dev
+    openmls-relay-join-dev
 
-## Core communication constraints
+These commands are development surfaces.
 
-CarbonStackComms is intended to preserve these constraints:
+They are not mature public CLI UX.
 
-- text-first messaging;
-- no rich previews;
-- no hidden linkification;
-- no inline attachments by default;
-- loud trust changes;
-- hostile-server assumptions;
-- strict parser minimization;
-- no server-trusted identity changes.
+They do not replace the legacy/stub-era send/inbox commands yet.
 
-## Dev-only OpenMLS runtime commands
+They do not prove production secure messaging.
 
-The explicit runtime OpenMLS dev commands are:
+They do not prove local-backbone.
 
-    go run ./cmd/comms openmls-send-dev
-    go run ./cmd/comms openmls-inbox-dev
+They do not prove hostile-server safety or metadata privacy.
 
-These commands are dev-only and pre-alpha. They do not replace the existing stub-era `send` / `inbox` commands yet.
+## Current validated shape
 
-`openmls-send-dev` current purpose:
+Current validation has covered:
 
-    call the OpenMLS sidecar `message-protect` command
-    submit the resulting application-message artifact through the Cypher relay helper
-    preserve dev-mode trust behavior by default, with optional `--strict`
+    OpenMLS application-message relay through Cypher;
+    openmls-send-dev -> Cypher -> openmls-inbox-dev --ack smoke proof;
+    wrapper-based OpenMLS runtime smoke proof;
+    Relay Space KeyPackage submit/inbox/write;
+    Relay Space Welcome inbox/write;
+    Relay Space add-member / Welcome submit;
+    Relay Space join with optional --ack-after-join;
+    positive relay-openmls-join-dev validation profile from the main runner;
+    no-ack and ACK_AFTER_JOIN live evidence;
+    no ack when join fails;
+    no ack when Welcome write fails;
+    no Welcome envelope rejection;
+    add-member sidecar-failure no-Welcome-submit test.
 
-Minimal send shape:
+The current add-member failure coverage proves that if sidecar conversation-add-member fails, the command returns the error, does not submit a Welcome, and does not print success-only fields.
 
-    go run ./cmd/comms openmls-send-dev \
-      --to-device <recipient-cypher-device-id> \
-      --sidecar-device-label <sender-sidecar-device-label> \
-      --conversation <sidecar-conversation-label> \
-      --message <plaintext> \
-      [--message-label <label>] \
-      [--strict]
+Remaining add-member edge tests may still be added later:
 
-`openmls-inbox-dev` current purpose:
+    KeyPackage artifact write failure before sidecar;
+    Welcome submit failure after sidecar success.
 
-    fetch the current device inbox from Cypher
-    skip unsupported non-OpenMLS application-message envelopes
-    write an OpenMLS application-message artifact through the relay helper
-    call the OpenMLS sidecar `message-open` command
-    print plaintext only after sidecar success
-    ack only after sidecar success when `--ack` is explicitly set
+## Stub-era send/inbox warning
 
-Minimal inbox shape:
+The older send/inbox path remains stub-era.
 
-    go run ./cmd/comms openmls-inbox-dev \
-      --sidecar-device-label <recipient-sidecar-device-label> \
-      --conversation <sidecar-conversation-label> \
-      [--message-label <label>] \
-      [--limit 1] \
-      [--ack]
+Do not confuse legacy send/inbox with the OpenMLS dev paths.
 
-This is not mature messaging UX, not local-backbone, and not a production security claim.
+The mature public send/inbox UX is not complete.
 
 ## OpenMLS sidecar
 
@@ -110,280 +107,86 @@ The promoted OpenMLS sidecar lives at:
 
     internal/protocol/mls/openmls-sidecar
 
-It is used by protocol tests and relay smoke proofs.
+It is used by protocol tests, relay smoke proofs, and dev command surfaces.
 
 It is still dev-local and experimental.
 
 It does not implement production secure vault storage.
 
-Generated signer/provider state must not be committed.
+Generated signer/provider/group state must not be committed.
 
-## Dev runtime OpenMLS smoke proof
+## Trust and candidate state
 
-The dev runtime smoke proof is:
+CarbonStackComms includes internal trust/candidate/recovery helpers, including:
 
-    scripts/dev-openmls-runtime-smoke.sh
+    provider trust report helpers;
+    provider trust-history draft/event/append helpers;
+    identity-candidates.json storage;
+    mapped mismatch classifier;
+    candidate review/update;
+    candidate/mismatch history helpers;
+    candidate observation orchestration;
+    recovery classifier/history/orchestration helpers.
 
-It creates a temporary local Cypher server, temporary Comms state files, dev-local OpenMLS sidecar identities, and a dev-local sidecar conversation. It then proves the current CLI runtime message path:
+Current boundary:
 
-    openmls-send-dev -> Cypher -> openmls-inbox-dev --ack
+    provider-observed identity material is not trust;
+    Relay Space membership is not trust;
+    OpenMLS/provider membership is not local verification;
+    Cypher delivery is not trust;
+    trust.json mutation from provider observation is not implemented;
+    verified provider identity import is not implemented.
 
-Boundary:
+## Key storage / vault warning
 
-    this is dev/pre-alpha only
-    this is not local-backbone
-    this is not production messaging UX
-    this does not replace the old stub-era send/inbox commands
-    sidecar KeyPackage/Welcome/bootstrap setup is still direct dev setup
-    the application-message path is the runtime CLI proof target
+Key storage is not complete.
 
-The script removes prior sidecar dev state before running and uses a temporary Cypher database.\n\n## Smoke harness
+Current sidecar/provider state is dev-local generated state.
 
-Run the current OpenMLS backbone self-test:
+CarbonStackComms does not currently implement a production encrypted vault, hardware-backed key storage, mature backup/restore, mature re-enrollment, or production secure local key lifecycle.
 
-    powershell -ExecutionPolicy Bypass -File .\scripts\self-test-openmls-backbone.ps1
+## Docs
 
-Run broader validation:
+Component docs live under:
 
-    powershell -ExecutionPolicy Bypass -File .\scripts\self-test-openmls-backbone.ps1 -Full
-    powershell -ExecutionPolicy Bypass -File .\scripts\check-no-rust-artifacts.ps1
+    docs/
 
-## Main runbook
+Start with:
 
-Use the main `carbonstack` repo for the current public runbook:
+    docs/README.md
 
-    docs/113-experimental-backbone-deployability-runbook-v0.md
+The main CarbonStack repo remains the public release and roadmap authority.
 
-## Trust-state model
+## Development validation
 
-CarbonStackComms has a development trust-state model covering:
+From this repository:
 
-- unknown;
-- unverified;
-- verified;
-- changed;
-- revoked;
-- reserved compromised.
+    go test ./... -count=1
 
-Component-local notes live in:
+For cross-repo validation, use the main CarbonStack runner:
 
-    docs/06-trust-state-model-v0.md
+    cd ~/repos/carbonstack_umbrella/carbonstack/tools/carbonstack-validate
+    go test ./... -count=1
+    go run . --profile doctor
 
-This model describes current dev trust behavior and future trust requirements. It is not production identity safety, not secure vault storage, and not provider-state linkage implementation.
+Use release-specific runbooks for release-package validation.
 
-## Provider-state linkage plan
+## Boundaries
 
-CarbonStackComms has a provider-state linkage plan for how OpenMLS sidecar/provider events should eventually map into Comms trust behavior.
+CarbonStackComms does not currently prove:
 
-Component-local notes live in:
-
-    docs/07-provider-state-linkage-plan-v0.md
-
-Current provider-trust decisions are pure pre-integration policy helpers. They do not mutate `trust.json`, do not append `trust-events.jsonl`, and do not implement production provider-state linkage.
-
-## Provider-trust report contract
-
-CarbonStackComms has an internal provider-trust report helper for inspecting pure `protocol.DecideProviderTrust` output.
-
-Component-local notes live in:
-
-    docs/08-provider-trust-report-contract-v0.md
-
-The structured JSON report fields are the diagnostic source of truth. Human summaries are interpretive helper text, not final UX copy and not the policy source of truth. The helper is non-mutating: it does not write `trust.json`, does not append `trust-events.jsonl`, and does not import provider identity.
-
-## Provider-trust report exposure decision
-
-The provider-trust report helper remains internal-only for now.
-
-Component-local notes live in:
-
-    docs/09-provider-trust-report-exposure-decision-v0.md
-
-No `provider-trust-report-dev` command exists yet. A future dev command should be JSON-first, non-mutating, and registry-tracked when it becomes useful.
-
-## Provider-originated trust-history append plan
-
-CarbonStackComms has a plan for how provider-originated security/trust observations may eventually append trust history.
-
-Component-local notes live in:
-
-    docs/10-provider-originated-trust-history-append-plan-v0.md
-
-No provider event currently appends `trust-events.jsonl` or mutates `trust.json`. Future append behavior must preserve the rule that provider observation alone does not verify identity.
-
-## Provider identity candidate / unverified import plan
-
-CarbonStackComms has a planning record for how provider-observed identity material may later become a candidate or unverified identity record.
-
-Component-local notes live in:
-
-    docs/11-provider-identity-candidate-import-plan-v0.md
-
-Provider-observed identity material is not trust. It must not automatically become verified, must not silently replace a known device, and must not let Cypher delivery or sidecar labels become trust roots.
-
-## Mapped provider identity mismatch plan
-
-CarbonStackComms has a planning record for how provider/candidate identity conflicts with known local device state should later become history-only, review-required, changed/reverify-required, or blocked.
-
-Component-local notes live in:
-
-    docs/12-mapped-provider-identity-mismatch-plan-v0.md
-
-Provider mismatch handling is not implemented yet. The current plan preserves that provider observation alone must not verify a device, replace a known key, mutate `trust.json`, or trust Cypher/sidecar labels as identity authority.
-
-## Relay Space boundary
-
-CarbonStackComms has a planning note for the future Relay Space boundary:
-
-    docs/13-relay-space-boundary-v0.md
-
-Relay Space is routing/conversation infrastructure, not identity authority. Server membership claims, invite claims, Cypher delivery, and sidecar labels must not become verified local trust.
-
-## Candidate identity storage priority
-
-CarbonStackComms has a decision record for the next narrow implementation target:
-
-    docs/14-candidate-identity-storage-priority-v0.md
-
-The preferred next implementation is separate `identity-candidates.json` storage owned by `internal/trust`. Candidate identity material must not automatically become verified trust, must not mutate `trust.json`, and must not affect send/open/ack behavior in the first spike.
-
-## Candidate review/update priority
-
-CarbonStackComms has a decision record for the next internal trust implementation target:
-
-    docs/15-candidate-review-update-priority-v0.md
-
-Candidate review/update mechanics should come before candidate/mismatch trust-history append integration. This remains internal trust-package work: no `trust.json` mutation, no `trust-events.jsonl` append, no verified identity import, no send/open/ack changes, no CLI, and no registry exposure yet.
-
-## Reset/recovery/re-enrollment boundary
-
-CarbonStackComms has a decision record for reset/recovery/re-enrollment boundaries:
-
-    docs/16-reset-recovery-reenrollment-boundary-v0.md
-
-Reset, recovery, and re-enrollment are not implemented yet. The current boundary is Comms-first: define how local app state, `trust.json`, `trust-events.jsonl`, `identity-candidates.json`, OpenMLS provider state, relay staging artifacts, and generated dev artifacts should be classified before any destructive reset or recovery helper exists.
-
-## Post-recovery-classifier priority
-
-CarbonStackComms has a decision record for the next internal trust implementation target after the pure reset/recovery classifier:
-
-    docs/17-post-recovery-classifier-priority-v0.md
-
-The next target is recovery-history append helpers. These should record selected recovery classifications in `trust-events.jsonl` without mutating `trust.json`, without mutating `identity-candidates.json`, without verifying identity, without replacing key material, without send/open/ack changes, and without CLI/registry exposure.
-
-## Post-recovery-orchestration boundary
-
-CarbonStackComms has a component-local reassessment after the recovery orchestration helper:
-
-    docs/18-post-recovery-orchestration-boundary-v0.md
-
-The current recovery orchestration path is internal and non-destructive. It can classify local recovery state and optionally append recovery-history events, but it is not recovery execution, not a verification ceremony, not Relay Space, not local-backbone, and not a CLI/registry surface.
-
-## Relay Space join/invite/member boundary
-
-CarbonStackComms has a component-local planning record for future Relay Space join/invite/member mechanics:
-
-    docs/19-relay-space-join-invite-member-boundary-v0.md
-
-Relay Space is a vector to OpenMLS join and a routing/conversation container. It is not local trust. OpenMLS/provider join is cryptographic group participation. Local verification remains the actual trust/auth/presence decision.
-
-## Provider live-flow boundary
-
-CarbonStackComms has a component-local planning record for future provider/OpenMLS live-flow wiring:
-
-    docs/20-provider-live-flow-boundary-v0.md
-
-Broad provider live-flow remains deferred. Future wiring must preserve candidate/review/recovery/trust boundaries, must not verify identity from provider observation alone, must not mutate `trust.json` from provider observation alone, and must keep ack gated on successful sidecar message-open/consume.
-
-## Validation profile boundary
-
-CarbonStackComms has a component-local planning record for future validation-profile participation:
-
-    docs/21-validation-profile-boundary-v0.md
-
-Future validation must distinguish trust-bearing state, identity-bearing state, provider state, and generated/build artifacts. Cleanup is not recovery, provider observation is not verification, and validation success is not a production/security claim.
-
-## Local-backbone go/no-go boundary
-
-CarbonStackComms has a component-local boundary record for the v0.5.34 local-backbone go/no-go reassessment:
-
-    docs/22-local-backbone-go-no-go-boundary-v0.md
-
-The decision is only a conditional GO for first narrow implementation planning. It is not a GO for broad Comms provider live-flow, local-backbone validation, CLI/registry exposure, verified identity import, or trust mutation from provider observation.
-
-## What is not implemented
-
-CarbonStackComms does not currently provide:
-
-- production runtime send/inbox OpenMLS UX;
-- Android app readiness;
-- production local vault storage;
-- external audit or certification;
-- production E2EE security claims;
-- hostile-server-complete rollback/replay defense.
-
-This repo is an implementation and development surface. The public release framing belongs in the main `carbonstack` repo.
-## Lower-level smoke harness
-
-The public self-test entrypoint is:
-
-    powershell -ExecutionPolicy Bypass -File .\scripts\self-test-openmls-backbone.ps1
-
-The lower-level implementation harness remains available for debugging:
-
-    powershell -ExecutionPolicy Bypass -File .\scripts\smoke-openmls-real-cypher-relay.ps1
-
-
----
+    production readiness;
+    production E2EE product readiness;
+    hostile-server safety;
+    metadata privacy;
+    secure local vault/key storage;
+    mature Comms runtime send/inbox UX;
+    verified identity;
+    secure enrollment;
+    rollback/replay safety against a malicious server;
+    Android readiness;
+    public ingress safety;
+    external audit or certification.
 
 License: MIT.
 See the repository's LICENSE file for more information.
-
-## Dev-only OpenMLS bootstrap commands
-
-These commands are development helpers for explicit OpenMLS sidecar bootstrap state.
-
-They are not production identity UX, not Relay Space join UX, not local-backbone, and not secure vault/state management.
-
-    openmls-identity-create-dev
-    openmls-identity-status-dev
-    openmls-bundle-export-dev
-    openmls-conversation-create-dev
-    openmls-conversation-load-check-dev
-    openmls-conversation-add-member-dev
-    openmls-conversation-join-dev
-
-Current identity bootstrap examples:
-
-    go run ./cmd/comms openmls-identity-create-dev --sidecar-device-label carbonstack-dev-alice
-    go run ./cmd/comms openmls-identity-status-dev --sidecar-device-label carbonstack-dev-alice
-    go run ./cmd/comms openmls-bundle-export-dev --sidecar-device-label carbonstack-dev-alice --write-artifact
-    go run ./cmd/comms openmls-conversation-create-dev --sidecar-device-label carbonstack-dev-alice --conversation carbonstack-dev-conversation
-    go run ./cmd/comms openmls-conversation-load-check-dev --sidecar-device-label carbonstack-dev-alice --conversation carbonstack-dev-conversation
-    go run ./cmd/comms openmls-conversation-add-member-dev --sidecar-device-label carbonstack-dev-alice --conversation carbonstack-dev-conversation --member-keypackage <path-to-member-keypackage>
-    go run ./cmd/comms openmls-conversation-join-dev --sidecar-device-label carbonstack-dev-bob --conversation carbonstack-dev-conversation --welcome <path-to-welcome>
-
-Boundary:
-
-    sidecar labels are explicit for now
-    Comms state/trust files are not mutated by these wrappers
-    existing send/inbox remain stub-era
-    dev-runtime-openmls remains the current manual smoke-profile proof
-## Wrapper-based dev runtime OpenMLS smoke proof
-
-This optional smoke script validates the current dev-only bootstrap wrapper surface before the existing runtime send/open path:
-
-    scripts/dev-openmls-runtime-smoke-wrappers.sh
-
-Proof shape:
-
-    openmls-*-dev bootstrap wrappers -> openmls-send-dev -> Cypher -> openmls-inbox-dev --ack
-
-Boundary:
-
-    This is a dev/pre-alpha wrapper smoke proof.
-    It is not local-backbone.
-    It is not mature messaging UX.
-    It is not production E2EE.
-    It does not replace the direct-sidecar smoke script yet.
-    The manual dev-runtime-openmls runner profile still wraps scripts/dev-openmls-runtime-smoke.sh.
