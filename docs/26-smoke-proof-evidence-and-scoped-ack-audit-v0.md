@@ -55,7 +55,7 @@ Step 1 should show KeyPackage submitted:
 
     command: openmls-relay-keypackage-submit-dev
     status: sent
-    content_type: application/vnd.carbonstack.openmls.keypackage
+    content_type: carbonstack.mls.keypackage.v0
     envelope_id:
 
 Step 2 should show add-member and Welcome submit:
