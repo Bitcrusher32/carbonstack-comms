@@ -2,11 +2,14 @@ package app
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"git.bitcrusher32.win/bitcrusher32/carbonstack-comms/internal/state"
 )
 
 func TestStateAuditDevReportsDomainsAndDoesNotPrintContents(t *testing.T) {
@@ -36,6 +39,7 @@ func TestStateAuditDevReportsDomainsAndDoesNotPrintContents(t *testing.T) {
 
 	for _, want := range []string{
 		"command: state-audit-dev",
+		"schema_version: carbonstack-comms-state-audit/v0",
 		"mutation_allowed: false",
 		"raw_secret_contents_printed: false",
 		"domain: comms_state",
@@ -56,6 +60,59 @@ func TestStateAuditDevReportsDomainsAndDoesNotPrintContents(t *testing.T) {
 
 	if strings.Contains(output, "secret-device-marker") {
 		t.Fatalf("state-audit-dev printed raw state contents:\n%s", output)
+	}
+}
+
+func TestStateAuditDevJSONFormatIsMachineReadableAndDoesNotPrintContents(t *testing.T) {
+	dir := t.TempDir()
+
+	statePath := filepath.Join(dir, "state.json")
+	if err := os.WriteFile(statePath, []byte(`{"device_id":"secret-device-marker"}`), 0o600); err != nil {
+		t.Fatalf("write state: %v", err)
+	}
+
+	output := captureStateAuditDevOutput(t, func() error {
+		return cmdStateAuditDev([]string{
+			"--state", statePath,
+			"--format", "json",
+		})
+	})
+
+	if strings.Contains(output, "secret-device-marker") {
+		t.Fatalf("state-audit-dev JSON printed raw state contents:\n%s", output)
+	}
+
+	var report state.StateAuditReport
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("unmarshal JSON report: %v\n%s", err, output)
+	}
+
+	if report.SchemaVersion != state.StateAuditSchemaVersion {
+		t.Fatalf("schema_version = %q", report.SchemaVersion)
+	}
+	if report.Command != "state-audit-dev" {
+		t.Fatalf("command = %q", report.Command)
+	}
+	if report.RawSecretContentsPrinted {
+		t.Fatal("JSON report claims raw secret contents were printed")
+	}
+	if report.MutationAllowed {
+		t.Fatal("JSON report claims mutation is allowed")
+	}
+	if report.DomainsTotal != len(report.Domains) {
+		t.Fatalf("domains_total = %d, len domains = %d", report.DomainsTotal, len(report.Domains))
+	}
+	if report.DomainsTotal == 0 {
+		t.Fatal("expected domains in JSON report")
+	}
+}
+
+func TestStateAuditDevRejectsUnknownFormat(t *testing.T) {
+	err := cmdStateAuditDev([]string{
+		"--format", "yaml",
+	})
+	if err == nil || !strings.Contains(err.Error(), "--format must be text or json") {
+		t.Fatalf("expected format error, got %v", err)
 	}
 }
 

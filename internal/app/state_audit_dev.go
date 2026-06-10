@@ -1,6 +1,8 @@
 package app
 
 import (
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 
@@ -15,25 +17,41 @@ func cmdStateAuditDev(args []string) error {
 	sidecarStateRoot := fs.String("sidecar-state-root", defaults.SidecarStateRoot, "OpenMLS sidecar generated state root")
 	sidecarTargetRoot := fs.String("sidecar-target-root", defaults.SidecarTargetRoot, "OpenMLS sidecar Rust/Cargo build output root")
 	cypherDBPath := fs.String("cypher-db", defaults.CypherDBPath, "local Cypher SQLite DB path to classify without reading contents")
+	format := fs.String("format", "text", "output format: text or json")
 
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
-	domains := state.AuditStateDomains(state.StateAuditOptions{
+	report := state.BuildStateAuditReport(state.StateAuditOptions{
 		StatePath:         *statePath,
 		SidecarStateRoot:  *sidecarStateRoot,
 		SidecarTargetRoot: *sidecarTargetRoot,
 		CypherDBPath:      *cypherDBPath,
 	})
 
-	fmt.Println("state audit dev")
-	fmt.Println("command: state-audit-dev")
-	fmt.Println("mutation_allowed: false")
-	fmt.Println("raw_secret_contents_printed: false")
-	fmt.Println("warning: dev/pre-alpha state-domain inventory; not vault encryption, recovery, deletion, or production key storage")
+	switch *format {
+	case "text":
+		printStateAuditText(report)
+		return nil
+	case "json":
+		encoder := json.NewEncoder(stdoutWriter{})
+		encoder.SetIndent("", "  ")
+		return encoder.Encode(report)
+	default:
+		return errors.New("--format must be text or json")
+	}
+}
 
-	for _, domain := range domains {
+func printStateAuditText(report state.StateAuditReport) {
+	fmt.Println("state audit dev")
+	fmt.Printf("schema_version: %s\n", report.SchemaVersion)
+	fmt.Printf("command: %s\n", report.Command)
+	fmt.Printf("mutation_allowed: %t\n", report.MutationAllowed)
+	fmt.Printf("raw_secret_contents_printed: %t\n", report.RawSecretContentsPrinted)
+	fmt.Printf("warning: %s\n", report.Warning)
+
+	for _, domain := range report.Domains {
 		fmt.Println()
 		fmt.Printf("domain: %s\n", domain.Domain)
 		fmt.Printf("path: %s\n", domain.Path)
@@ -50,7 +68,14 @@ func cmdStateAuditDev(args []string) error {
 	}
 
 	fmt.Println()
-	fmt.Printf("domains_total: %d\n", len(domains))
+	fmt.Printf("domains_total: %d\n", report.DomainsTotal)
+	fmt.Printf("domains_present: %d\n", report.DomainsPresent)
+	fmt.Printf("domains_absent: %d\n", report.DomainsAbsent)
 	fmt.Println("status: inspected")
-	return nil
+}
+
+type stdoutWriter struct{}
+
+func (stdoutWriter) Write(p []byte) (int, error) {
+	return fmt.Print(string(p))
 }

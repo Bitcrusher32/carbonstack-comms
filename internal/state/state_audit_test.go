@@ -1,6 +1,7 @@
 package state
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -78,6 +79,46 @@ func TestAuditStateDomainsReportsKnownDomainsWithoutReadingContents(t *testing.T
 	}
 }
 
+func TestBuildStateAuditReportIsMachineReadableAndNonMutating(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+
+	if err := os.WriteFile(statePath, []byte(`{"device_id":"secret-device-marker"}`), 0o600); err != nil {
+		t.Fatalf("write state: %v", err)
+	}
+
+	report := BuildStateAuditReport(StateAuditOptions{
+		StatePath: statePath,
+	})
+
+	if report.SchemaVersion != StateAuditSchemaVersion {
+		t.Fatalf("schema version = %q", report.SchemaVersion)
+	}
+	if report.Command != "state-audit-dev" {
+		t.Fatalf("command = %q", report.Command)
+	}
+	if report.MutationAllowed {
+		t.Fatal("state audit report must not allow mutation")
+	}
+	if report.RawSecretContentsPrinted {
+		t.Fatal("state audit report must not print raw secret contents")
+	}
+	if report.DomainsTotal != len(report.Domains) {
+		t.Fatalf("domains_total = %d, len domains = %d", report.DomainsTotal, len(report.Domains))
+	}
+
+	body, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("marshal report: %v", err)
+	}
+	if string(body) == "" {
+		t.Fatal("expected JSON body")
+	}
+	if containsStateAuditTestString(string(body), "secret-device-marker") {
+		t.Fatalf("machine-readable report leaked state contents: %s", string(body))
+	}
+}
+
 func TestAuditStateDomainsDefaultsPaths(t *testing.T) {
 	domains := AuditStateDomains(StateAuditOptions{})
 
@@ -109,4 +150,13 @@ func TestAuditStateDomainsDefaultsPaths(t *testing.T) {
 	if !foundCypher {
 		t.Fatalf("expected default cypher db path %q", DefaultCypherDBPath)
 	}
+}
+
+func containsStateAuditTestString(s string, needle string) bool {
+	for i := 0; i+len(needle) <= len(s); i++ {
+		if s[i:i+len(needle)] == needle {
+			return true
+		}
+	}
+	return false
 }
