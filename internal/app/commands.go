@@ -48,6 +48,8 @@ func Run(args []string) error {
 		return cmdInbox(args[1:])
 	case "ack":
 		return cmdAck(args[1:])
+	case "state-audit-dev":
+		return cmdStateAuditDev(args[1:])
 	case "openmls-send-dev":
 		return cmdOpenMLSSendDev(args[1:])
 	case "openmls-inbox-dev":
@@ -101,6 +103,7 @@ func usage() {
 	fmt.Println("  send")
 	fmt.Println("  inbox")
 	fmt.Println("  ack")
+	fmt.Println("  state-audit-dev")
 	fmt.Println("  openmls-send-dev")
 	fmt.Println("  openmls-inbox-dev")
 	fmt.Println("  openmls-identity-create-dev")
