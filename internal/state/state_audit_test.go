@@ -68,6 +68,9 @@ func TestAuditStateDomainsReportsKnownDomainsWithoutReadingContents(t *testing.T
 	if !byName["sidecar_generated_state"].Present {
 		t.Fatal("expected sidecar_generated_state to be present")
 	}
+	if byName["sidecar_generated_state"].VaultClass != string(VaultClassGeneratedSecretState) {
+		t.Fatalf("sidecar_generated_state vault_class = %q", byName["sidecar_generated_state"].VaultClass)
+	}
 	if byName["sidecar_generated_state"].Kind != "directory" {
 		t.Fatalf("sidecar_generated_state kind = %q", byName["sidecar_generated_state"].Kind)
 	}

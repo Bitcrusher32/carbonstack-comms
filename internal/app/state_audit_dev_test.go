@@ -50,6 +50,7 @@ func TestStateAuditDevReportsDomainsAndDoesNotPrintContents(t *testing.T) {
 		"domain: sidecar_build_output",
 		"domain: local_cypher_db",
 		"classification: generated-dev-provider-state",
+		"vault_class: generated_secret_state",
 		"future_vault_required: true",
 		"status: inspected",
 	} {
@@ -104,6 +105,9 @@ func TestStateAuditDevJSONFormatIsMachineReadableAndDoesNotPrintContents(t *test
 	}
 	if report.DomainsTotal == 0 {
 		t.Fatal("expected domains in JSON report")
+	}
+	if report.Domains[0].VaultClass == "" {
+		t.Fatal("expected vault_class in JSON report domain")
 	}
 }
 

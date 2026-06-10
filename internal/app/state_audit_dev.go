@@ -59,6 +59,7 @@ func printStateAuditText(report state.StateAuditReport) {
 		fmt.Printf("kind: %s\n", domain.Kind)
 		fmt.Printf("size_bytes: %d\n", domain.SizeBytes)
 		fmt.Printf("classification: %s\n", domain.Classification)
+		fmt.Printf("vault_class: %s\n", domain.VaultClass)
 		fmt.Printf("secret_bearing: %s\n", domain.SecretBearing)
 		fmt.Printf("future_vault_required: %t\n", domain.FutureVaultRequired)
 		fmt.Printf("safe_to_print_contents: %t\n", domain.SafeToPrintContents)
