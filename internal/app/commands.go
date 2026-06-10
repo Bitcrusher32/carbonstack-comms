@@ -451,6 +451,20 @@ func cmdRevokeDevice(args []string) error {
 	return nil
 }
 
+func printLegacyStubWarning(command string) {
+	switch command {
+	case "send":
+		fmt.Println("warning: legacy/stub-era send path; uses mock/stub message encryption and is not the mature OpenMLS-backed send UX")
+		fmt.Println("warning_replaced_by: openmls-send-dev for current dev/pre-alpha OpenMLS runtime proof")
+	case "inbox":
+		fmt.Println("warning: legacy/stub-era inbox path; may print stub_plaintext and is not the mature OpenMLS-backed inbox UX")
+		fmt.Println("warning_replaced_by: openmls-inbox-dev for current dev/pre-alpha OpenMLS runtime proof")
+	case "ack":
+		fmt.Println("warning: legacy ack helper; acknowledges a Cypher envelope but is not a standalone secure receive proof")
+		fmt.Println("warning_scope: delivery/local-processing state only; not trust, identity verification, hostile-server safety, or production security")
+	}
+}
+
 func cmdSend(args []string) error {
 	fs := flag.NewFlagSet("send", flag.ExitOnError)
 	statePath := fs.String("state", state.DefaultStatePath, "local state file path")
@@ -460,6 +474,8 @@ func cmdSend(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+
+	printLegacyStubWarning("send")
 
 	if *toDevice == "" || *message == "" {
 		return errors.New("--to-device and --message are required")
@@ -514,6 +530,8 @@ func cmdInbox(args []string) error {
 		return err
 	}
 
+	printLegacyStubWarning("inbox")
+
 	s, err := state.RequireReadyDevice(*statePath)
 	if err != nil {
 		return err
@@ -549,6 +567,8 @@ func cmdAck(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+
+	printLegacyStubWarning("ack")
 
 	if *envelopeID == "" {
 		return errors.New("--envelope is required")
