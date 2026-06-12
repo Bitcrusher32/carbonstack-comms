@@ -279,7 +279,11 @@ func cmdListDevices(args []string) error {
 		return err
 	}
 
-	paths := trust.PathsForStatePath(*statePath)
+	commandPaths, err := resolveCommandStatePaths(*statePath)
+	if err != nil {
+		return err
+	}
+	paths := commandPaths.TrustPaths
 
 	fmt.Printf("account_id: %s\n", resp.AccountID)
 	for _, d := range resp.Devices {
@@ -339,7 +343,11 @@ func cmdVerifyDevice(args []string) error {
 		return errors.New("--device and --public-key are required")
 	}
 
-	paths := trust.PathsForStatePath(*statePath)
+	commandPaths, err := resolveCommandStatePaths(*statePath)
+	if err != nil {
+		return err
+	}
+	paths := commandPaths.TrustPaths
 	record, err := trust.VerifyDevice(paths, *accountID, *deviceID, *label, *publicKey, "cli")
 	if err != nil {
 		return err
@@ -359,7 +367,11 @@ func cmdTrustHistory(args []string) error {
 		return err
 	}
 
-	paths := trust.PathsForStatePath(*statePath)
+	commandPaths, err := resolveCommandStatePaths(*statePath)
+	if err != nil {
+		return err
+	}
+	paths := commandPaths.TrustPaths
 	events, err := trust.LoadEvents(paths.EventsPath)
 	if err != nil {
 		return err
@@ -388,7 +400,11 @@ func cmdTrustList(args []string) error {
 		return err
 	}
 
-	paths := trust.PathsForStatePath(*statePath)
+	commandPaths, err := resolveCommandStatePaths(*statePath)
+	if err != nil {
+		return err
+	}
+	paths := commandPaths.TrustPaths
 	store, err := trust.LoadStore(paths.TrustPath)
 	if err != nil {
 		return err
@@ -418,7 +434,11 @@ func cmdSimulateKeyChange(args []string) error {
 		return err
 	}
 
-	paths := trust.PathsForStatePath(*statePath)
+	commandPaths, err := resolveCommandStatePaths(*statePath)
+	if err != nil {
+		return err
+	}
+	paths := commandPaths.TrustPaths
 	record, err := trust.MarkDeviceChanged(paths, *deviceID, *publicKey, "cli")
 	if err != nil {
 		return err
@@ -439,7 +459,11 @@ func cmdRevokeDevice(args []string) error {
 		return err
 	}
 
-	paths := trust.PathsForStatePath(*statePath)
+	commandPaths, err := resolveCommandStatePaths(*statePath)
+	if err != nil {
+		return err
+	}
+	paths := commandPaths.TrustPaths
 	record, err := trust.RevokeDevice(paths, *deviceID, "cli")
 	if err != nil {
 		return err
@@ -486,7 +510,11 @@ func cmdSend(args []string) error {
 		return err
 	}
 
-	paths := trust.PathsForStatePath(*statePath)
+	commandPaths, err := resolveCommandStatePaths(*statePath)
+	if err != nil {
+		return err
+	}
+	paths := commandPaths.TrustPaths
 	decision, err := trust.EvaluateSend(paths, *toDevice, *strict)
 	if err != nil {
 		return err

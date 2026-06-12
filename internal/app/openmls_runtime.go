@@ -72,7 +72,11 @@ func cmdOpenMLSSendDev(args []string) error {
 		return err
 	}
 
-	paths := trust.PathsForStatePath(*statePath)
+	commandPaths, err := resolveCommandStatePaths(*statePath)
+	if err != nil {
+		return err
+	}
+	paths := commandPaths.TrustPaths
 	decision, err := trust.EvaluateSend(paths, *toDevice, *strict)
 	if err != nil {
 		return err
