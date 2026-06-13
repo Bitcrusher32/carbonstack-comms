@@ -52,6 +52,7 @@ Current dev/pre-alpha surfaces include:
     openmls-inbox-dev
     openmls-relay-keypackage-submit-dev
     openmls-relay-keypackage-inbox-dev
+    openmls-relay-welcome-submit-dev
     openmls-relay-welcome-inbox-dev
     openmls-relay-add-member-dev
     openmls-relay-join-dev
@@ -86,12 +87,11 @@ Current validation has covered:
     no Welcome envelope rejection;
     add-member sidecar-failure no-Welcome-submit test.
 
-The current add-member failure coverage proves that if sidecar conversation-add-member fails, the command returns the error, does not submit a Welcome, and does not print success-only fields.
+The current add-member failure coverage proves:
 
-Remaining add-member edge tests may still be added later:
-
-    KeyPackage artifact write failure before sidecar;
-    Welcome submit failure after sidecar success.
+    if KeyPackage artifact writing fails, sidecar add-member does not run and Welcome submit does not run;
+    if sidecar conversation-add-member fails, the command returns the error, does not submit a Welcome, and does not print success-only fields;
+    if Welcome submit fails after sidecar success, the command returns the error and does not print success-only fields.
 
 ## Stub-era send/inbox warning
 
