@@ -489,17 +489,25 @@ func printLegacyStubWarning(command string) {
 	}
 }
 
+func legacyStubOptInError(command string, replacement string) error {
+	return fmt.Errorf("legacy/stub-era %s path requires --allow-legacy-stub; use %s for current dev/pre-alpha OpenMLS runtime proof where applicable", command, replacement)
+}
+
 func cmdSend(args []string) error {
 	fs := flag.NewFlagSet("send", flag.ExitOnError)
 	statePath := fs.String("state", state.DefaultStatePath, "local state file path")
 	toDevice := fs.String("to-device", "", "recipient device ID")
 	message := fs.String("message", "", "message text")
 	strict := fs.Bool("strict", false, "block sending to unknown, unverified, or changed devices")
+	allowLegacyStub := fs.Bool("allow-legacy-stub", false, "explicitly allow the legacy mock/stub send path")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
 	printLegacyStubWarning("send")
+	if !*allowLegacyStub {
+		return legacyStubOptInError("send", "openmls-send-dev")
+	}
 
 	if *toDevice == "" || *message == "" {
 		return errors.New("--to-device and --message are required")
@@ -554,11 +562,15 @@ func cmdSend(args []string) error {
 func cmdInbox(args []string) error {
 	fs := flag.NewFlagSet("inbox", flag.ExitOnError)
 	statePath := fs.String("state", state.DefaultStatePath, "local state file path")
+	allowLegacyStub := fs.Bool("allow-legacy-stub", false, "explicitly allow the legacy mock/stub inbox path")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
 	printLegacyStubWarning("inbox")
+	if !*allowLegacyStub {
+		return legacyStubOptInError("inbox", "openmls-inbox-dev")
+	}
 
 	s, err := state.RequireReadyDevice(*statePath)
 	if err != nil {
@@ -592,11 +604,15 @@ func cmdAck(args []string) error {
 	fs := flag.NewFlagSet("ack", flag.ExitOnError)
 	statePath := fs.String("state", state.DefaultStatePath, "local state file path")
 	envelopeID := fs.String("envelope", "", "envelope ID to acknowledge")
+	allowLegacyStub := fs.Bool("allow-legacy-stub", false, "explicitly allow the standalone legacy ack helper")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
 	printLegacyStubWarning("ack")
+	if !*allowLegacyStub {
+		return legacyStubOptInError("ack", "openmls-inbox-dev --ack or a scoped Relay Space ack path")
+	}
 
 	if *envelopeID == "" {
 		return errors.New("--envelope is required")
