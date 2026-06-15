@@ -91,8 +91,33 @@ func Run(args []string) error {
 
 func usage() {
 	fmt.Println("CarbonStackComms Phase 2A CLI")
-	fmt.Println()
-	fmt.Println("Commands:")
+	fmt.Println("")
+	fmt.Println("Recommended dev/pre-alpha normal-message wrappers:")
+	fmt.Println("  message-send-dev")
+	fmt.Println("  message-inbox-dev")
+	fmt.Println("")
+	fmt.Println("Lower-level direct OpenMLS implementation/proof paths:")
+	fmt.Println("  openmls-send-dev")
+	fmt.Println("  openmls-inbox-dev")
+	fmt.Println("")
+	fmt.Println("OpenMLS identity/conversation bootstrap:")
+	fmt.Println("  openmls-identity-create-dev")
+	fmt.Println("  openmls-identity-status-dev")
+	fmt.Println("  openmls-bundle-export-dev")
+	fmt.Println("  openmls-conversation-create-dev")
+	fmt.Println("  openmls-conversation-load-check-dev")
+	fmt.Println("  openmls-conversation-add-member-dev")
+	fmt.Println("  openmls-conversation-join-dev")
+	fmt.Println("")
+	fmt.Println("Relay Space onboarding/artifact dev paths:")
+	fmt.Println("  openmls-relay-keypackage-submit-dev")
+	fmt.Println("  openmls-relay-keypackage-inbox-dev")
+	fmt.Println("  openmls-relay-welcome-submit-dev")
+	fmt.Println("  openmls-relay-welcome-inbox-dev")
+	fmt.Println("  openmls-relay-add-member-dev")
+	fmt.Println("  openmls-relay-join-dev")
+	fmt.Println("")
+	fmt.Println("Local identity/trust/device helpers:")
 	fmt.Println("  init")
 	fmt.Println("  dev-create-invite")
 	fmt.Println("  claim-invite")
@@ -104,27 +129,14 @@ func usage() {
 	fmt.Println("  trust-list")
 	fmt.Println("  simulate-key-change")
 	fmt.Println("  revoke-device")
+	fmt.Println("  state-audit-dev")
+	fmt.Println("")
+	fmt.Println("Legacy stub-era continuity surfaces; require --allow-legacy-stub:")
 	fmt.Println("  send")
 	fmt.Println("  inbox")
 	fmt.Println("  ack")
-	fmt.Println("  state-audit-dev")
-	fmt.Println("  message-send-dev")
-	fmt.Println("  message-inbox-dev")
-	fmt.Println("  openmls-send-dev")
-	fmt.Println("  openmls-inbox-dev")
-	fmt.Println("  openmls-identity-create-dev")
-	fmt.Println("  openmls-identity-status-dev")
-	fmt.Println("  openmls-bundle-export-dev")
-	fmt.Println("  openmls-conversation-create-dev")
-	fmt.Println("  openmls-conversation-load-check-dev")
-	fmt.Println("  openmls-conversation-add-member-dev")
-	fmt.Println("  openmls-conversation-join-dev")
-	fmt.Println("  openmls-relay-keypackage-submit-dev")
-	fmt.Println("  openmls-relay-keypackage-inbox-dev")
-	fmt.Println("  openmls-relay-welcome-submit-dev")
-	fmt.Println("  openmls-relay-welcome-inbox-dev")
-	fmt.Println("  openmls-relay-add-member-dev")
-	fmt.Println("  openmls-relay-join-dev")
+	fmt.Println("")
+	fmt.Println("Boundary: dev/pre-alpha command surface; not production secure messaging, not hostile-server safety, not mature messenger UX.")
 }
 
 func cmdInit(args []string) error {
@@ -485,10 +497,10 @@ func printLegacyStubWarning(command string) {
 	switch command {
 	case "send":
 		fmt.Println("warning: legacy/stub-era send path; uses mock/stub message encryption and is not the mature OpenMLS-backed send UX")
-		fmt.Println("warning_replaced_by: openmls-send-dev for current dev/pre-alpha OpenMLS runtime proof")
+		fmt.Println("warning_replaced_by: message-send-dev for recommended dev/pre-alpha normal-message wrapper; openmls-send-dev remains lower-level direct proof")
 	case "inbox":
 		fmt.Println("warning: legacy/stub-era inbox path; may print stub_plaintext and is not the mature OpenMLS-backed inbox UX")
-		fmt.Println("warning_replaced_by: openmls-inbox-dev for current dev/pre-alpha OpenMLS runtime proof")
+		fmt.Println("warning_replaced_by: message-inbox-dev for recommended dev/pre-alpha normal-message wrapper; openmls-inbox-dev remains lower-level direct proof")
 	case "ack":
 		fmt.Println("warning: legacy ack helper; acknowledges a Cypher envelope but is not a standalone secure receive proof")
 		fmt.Println("warning_scope: delivery/local-processing state only; not trust, identity verification, hostile-server safety, or production security")
@@ -496,7 +508,7 @@ func printLegacyStubWarning(command string) {
 }
 
 func legacyStubOptInError(command string, replacement string) error {
-	return fmt.Errorf("legacy/stub-era %s path requires --allow-legacy-stub; use %s for current dev/pre-alpha OpenMLS runtime proof where applicable", command, replacement)
+	return fmt.Errorf("legacy/stub-era %s path requires --allow-legacy-stub; use %s for the recommended dev/pre-alpha normal-message path where applicable", command, replacement)
 }
 
 func cmdSend(args []string) error {
@@ -512,7 +524,7 @@ func cmdSend(args []string) error {
 
 	printLegacyStubWarning("send")
 	if !*allowLegacyStub {
-		return legacyStubOptInError("send", "openmls-send-dev")
+		return legacyStubOptInError("send", "message-send-dev")
 	}
 
 	if *toDevice == "" || *message == "" {
@@ -575,7 +587,7 @@ func cmdInbox(args []string) error {
 
 	printLegacyStubWarning("inbox")
 	if !*allowLegacyStub {
-		return legacyStubOptInError("inbox", "openmls-inbox-dev")
+		return legacyStubOptInError("inbox", "message-inbox-dev")
 	}
 
 	s, err := state.RequireReadyDevice(*statePath)
@@ -617,7 +629,7 @@ func cmdAck(args []string) error {
 
 	printLegacyStubWarning("ack")
 	if !*allowLegacyStub {
-		return legacyStubOptInError("ack", "openmls-inbox-dev --ack or a scoped Relay Space ack path")
+		return legacyStubOptInError("ack", "message-inbox-dev --ack or a scoped Relay Space ack path")
 	}
 
 	if *envelopeID == "" {

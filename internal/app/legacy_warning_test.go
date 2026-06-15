@@ -19,7 +19,7 @@ func TestLegacySendRequiresExplicitOptIn(t *testing.T) {
 
 	for _, want := range []string{
 		"warning: legacy/stub-era send path",
-		"warning_replaced_by: openmls-send-dev",
+		"warning_replaced_by: message-send-dev",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("send output missing %q\n%s", want, output)
@@ -54,7 +54,7 @@ func TestLegacyInboxRequiresExplicitOptIn(t *testing.T) {
 
 	for _, want := range []string{
 		"warning: legacy/stub-era inbox path",
-		"warning_replaced_by: openmls-inbox-dev",
+		"warning_replaced_by: message-inbox-dev",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("inbox output missing %q\n%s", want, output)
