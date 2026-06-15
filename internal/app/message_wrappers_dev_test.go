@@ -316,3 +316,198 @@ func TestMessageInboxDevReportsAckFailureAfterOpenSuccess(t *testing.T) {
 		}
 	}
 }
+
+func TestMessageSendDevStrictBlocksUnknownRecipientBeforeProtectOrSubmit(t *testing.T) {
+	statePath := writeReadyState(t)
+
+	restore := stubOpenMLSSendDevHooks(t)
+	defer restore()
+
+	protectCalled := false
+	submitCalled := false
+
+	runOpenMLSMessageProtectForCommand = func(sidecarDir string, deviceLabel string, conversationLabel string, messageLabel string, plaintext string) (openMLSMessageProtectResult, error) {
+		protectCalled = true
+		return openMLSMessageProtectResult{}, nil
+	}
+	submitOpenMLSArtifactEnvelopeForCommand = func(c client.CypherClient, senderDeviceID string, recipientDeviceID string, artifactKind string, submittedArtifactPath string, clientCreatedAt string) (client.SubmitEnvelopeResponse, error) {
+		submitCalled = true
+		return client.SubmitEnvelopeResponse{}, nil
+	}
+
+	err := Run([]string{
+		"message-send-dev",
+		"--state", statePath,
+		"--to-device", "unknown-recipient-device",
+		"--sidecar-device-label", "carbonstack-alice-device",
+		"--conversation", "carbonstack-test-conversation",
+		"--message", "hello bob",
+		"--strict",
+	})
+
+	if err == nil || !strings.Contains(err.Error(), "message-send-dev blocked by trust policy") {
+		t.Fatalf("expected strict trust-policy block, got %v", err)
+	}
+	if protectCalled {
+		t.Fatal("message-protect should not be called after strict trust-policy block")
+	}
+	if submitCalled {
+		t.Fatal("submit should not be called after strict trust-policy block")
+	}
+}
+
+func TestMessageSendDevResolvesRelativeArtifactHintAgainstSidecarDir(t *testing.T) {
+	statePath := writeReadyState(t)
+	sidecarDir := t.TempDir()
+
+	restore := stubOpenMLSSendDevHooks(t)
+	defer restore()
+
+	runOpenMLSMessageProtectForCommand = func(sidecarDir string, deviceLabel string, conversationLabel string, messageLabel string, plaintext string) (openMLSMessageProtectResult, error) {
+		return openMLSMessageProtectResult{
+			DeviceLabel:             deviceLabel,
+			ConversationLabel:       conversationLabel,
+			MessageLabel:            "message-relative-artifact",
+			MessageArtifactPathHint: "relative/application-message.bin",
+		}, nil
+	}
+
+	submitOpenMLSArtifactEnvelopeForCommand = func(c client.CypherClient, senderDeviceID string, recipientDeviceID string, artifactKind string, submittedArtifactPath string, clientCreatedAt string) (client.SubmitEnvelopeResponse, error) {
+		want := filepath.Join(sidecarDir, "relative/application-message.bin")
+		if submittedArtifactPath != want {
+			t.Fatalf("submittedArtifactPath = %q, want %q", submittedArtifactPath, want)
+		}
+		return client.SubmitEnvelopeResponse{
+			EnvelopeID:       "env-relative-artifact",
+			DeliveryState:    "queued",
+			ServerReceivedAt: "2026-06-05T00:00:00Z",
+			PayloadSHA256:    "fake-sha256",
+			PayloadSizeBytes: 23,
+		}, nil
+	}
+
+	err := Run([]string{
+		"message-send-dev",
+		"--state", statePath,
+		"--to-device", "recipient-device",
+		"--sidecar-dir", sidecarDir,
+		"--sidecar-device-label", "carbonstack-alice-device",
+		"--conversation", "carbonstack-test-conversation",
+		"--message", "hello bob",
+	})
+	if err != nil {
+		t.Fatalf("message-send-dev: %v", err)
+	}
+}
+
+func TestMessageInboxDevSkipsUnsupportedEnvelopeWithoutOpenOrAck(t *testing.T) {
+	statePath := writeReadyState(t)
+
+	restore := stubInboxDevHooks(t)
+	defer restore()
+
+	inboxForCommand = func(c client.CypherClient, deviceID string) (client.InboxResponse, error) {
+		return client.InboxResponse{
+			DeviceID: deviceID,
+			Envelopes: []client.EnvelopeRecord{{
+				EnvelopeID:        "stub-envelope",
+				SenderDeviceID:    "alice-device",
+				RecipientDeviceID: deviceID,
+				ContentType:       "carbonstack.message.text.stub.v0",
+				ProtocolVersion:   "stub-v0",
+			}},
+		}, nil
+	}
+
+	openCalled := false
+	ackCalled := false
+
+	runOpenMLSMessageOpenForCommand = func(sidecarDir string, deviceLabel string, conversationLabel string, messageLabel string, messageArtifactPath string) (openMLSMessageOpenResult, error) {
+		openCalled = true
+		return openMLSMessageOpenResult{}, nil
+	}
+	ackEnvelopeForCommand = func(c client.CypherClient, envelopeID string, recipientDeviceID string) (client.AckEnvelopeResponse, error) {
+		ackCalled = true
+		return client.AckEnvelopeResponse{}, nil
+	}
+
+	var err error
+	output := captureOutput(func() {
+		err = Run([]string{
+			"message-inbox-dev",
+			"--state", statePath,
+			"--sidecar-device-label", "carbonstack-bob-device",
+			"--conversation", "carbonstack-test-conversation",
+			"--ack",
+		})
+	})
+
+	if err != nil {
+		t.Fatalf("message-inbox-dev: %v", err)
+	}
+	if openCalled {
+		t.Fatal("message-open should not be called for unsupported envelope")
+	}
+	if ackCalled {
+		t.Fatal("ack should not be called for unsupported envelope")
+	}
+	for _, want := range []string{
+		"message skipped",
+		"reason: unsupported_envelope",
+		"unsupported_envelopes: 1",
+		"open_failures: 0",
+		"ack_failures: 0",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("unsupported-envelope output missing %q\n%s", want, output)
+		}
+	}
+}
+
+func TestMessageInboxDevReportsMessageOpenFailureWithoutAck(t *testing.T) {
+	statePath := writeReadyState(t)
+
+	restore := stubInboxDevHooks(t)
+	defer restore()
+
+	inboxForCommand = oneOpenMLSInboxResponse
+
+	runOpenMLSMessageOpenForCommand = func(sidecarDir string, deviceLabel string, conversationLabel string, messageLabel string, messageArtifactPath string) (openMLSMessageOpenResult, error) {
+		return openMLSMessageOpenResult{}, errors.New("message-open failed")
+	}
+
+	ackCalled := false
+	ackEnvelopeForCommand = func(c client.CypherClient, envelopeID string, recipientDeviceID string) (client.AckEnvelopeResponse, error) {
+		ackCalled = true
+		return client.AckEnvelopeResponse{}, nil
+	}
+
+	var err error
+	output := captureOutput(func() {
+		err = Run([]string{
+			"message-inbox-dev",
+			"--state", statePath,
+			"--sidecar-device-label", "carbonstack-bob-device",
+			"--conversation", "carbonstack-test-conversation",
+			"--ack",
+		})
+	})
+
+	if err != nil {
+		t.Fatalf("message-inbox-dev should report open failure without failing command: %v", err)
+	}
+	if ackCalled {
+		t.Fatal("ack should not be called when message-open fails")
+	}
+	for _, want := range []string{
+		"message open failed",
+		"error: message-open failed",
+		"acked: false",
+		"open_failures: 1",
+		"ack_failures: 0",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("message-open failure output missing %q\n%s", want, output)
+		}
+	}
+}
