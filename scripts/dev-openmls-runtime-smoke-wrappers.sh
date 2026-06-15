@@ -238,9 +238,9 @@ run_comms openmls-conversation-load-check-dev \
 cat "$bob_load_out"
 grep -q "group_reloadable: true" "$bob_load_out" || fail "Bob conversation load-check did not report group_reloadable: true"
 
-log "Send application message through Comms openmls-send-dev"
-send_out="$work_dir/openmls-send-dev.txt"
-run_comms openmls-send-dev \
+log "Send application message through Comms message-send-dev"
+send_out="$work_dir/message-send-dev.txt"
+run_comms message-send-dev \
   --state "$alice_state" \
   --to-device "$bob_device_id" \
   --sidecar-device-label "$alice_label" \
@@ -250,13 +250,16 @@ run_comms openmls-send-dev \
 
 cat "$send_out"
 
-grep -q "status: sent" "$send_out" || fail "openmls-send-dev did not report status: sent"
-grep -q "content_type: carbonstack.mls.application-message.v0" "$send_out" || fail "send output did not report OpenMLS application-message content type"
-grep -q "protocol_version: carbonstack-openmls-sidecar-v0" "$send_out" || fail "send output did not report OpenMLS sidecar protocol version"
+grep -q "status: sent" "$send_out" || fail "message-send-dev did not report status: sent"
+grep -q "command: message-send-dev" "$send_out" || fail "message-send-dev output did not identify wrapper command"
+grep -q "implementation_path: openmls-send-dev" "$send_out" || fail "message-send-dev output did not identify OpenMLS implementation path"
+grep -q "backend: OpenMLS sidecar + Cypher application-message envelope" "$send_out" || fail "message-send-dev output did not identify backend"
+grep -q "payload_sha256:" "$send_out" || fail "message-send-dev output did not report payload hash"
+grep -q "warning: dev/pre-alpha OpenMLS message wrapper; not production messaging UX" "$send_out" || fail "message-send-dev output did not preserve dev/pre-alpha warning"
 
-log "Open and ack application message through Comms openmls-inbox-dev"
-inbox_out="$work_dir/openmls-inbox-dev.txt"
-run_comms openmls-inbox-dev \
+log "Open and ack application message through Comms message-inbox-dev"
+inbox_out="$work_dir/message-inbox-dev.txt"
+run_comms message-inbox-dev \
   --state "$bob_state" \
   --sidecar-device-label "$bob_label" \
   --conversation "$conversation_label" \
@@ -266,9 +269,9 @@ run_comms openmls-inbox-dev \
 
 cat "$inbox_out"
 
-grep -q "openmls_message_opened" "$inbox_out" || fail "openmls-inbox-dev did not report message opened"
+grep -q "message opened" "$inbox_out" || fail "message-inbox-dev did not report message opened"
 grep -q "plaintext_utf8: $plaintext" "$inbox_out" || fail "opened plaintext did not match expected message"
-grep -q "acked: true" "$inbox_out" || fail "openmls-inbox-dev did not ack after message-open success"
+grep -q "acked: true" "$inbox_out" || fail "message-inbox-dev did not ack after message-open success"
 
 log "Verify Bob inbox is empty after ack"
 after_ack="$work_dir/bob-inbox-after-ack.json"
@@ -288,7 +291,7 @@ if [ "$queued_after_ack" != "0" ]; then
 fi
 
 log "PASS: wrapper-based dev runtime OpenMLS CLI smoke proof"
-printf 'proof: openmls-*-dev bootstrap wrappers -> openmls-send-dev -> Cypher -> openmls-inbox-dev --ack\n'
+printf 'proof: openmls-*-dev bootstrap wrappers -> message-send-dev -> Cypher -> message-inbox-dev --ack\n'
 printf 'plaintext: %s\n' "$plaintext"
 printf 'workspace: %s\n' "$work_dir"
 printf 'boundary: dev/pre-alpha wrapper smoke proof; not local-backbone; not production messaging UX\n'
