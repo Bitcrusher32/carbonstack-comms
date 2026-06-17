@@ -507,6 +507,14 @@ fn write_json_file<T: Serialize>(path: &Path, value: &T) -> io::Result<()> {
         .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("json write failed: {err}")))
 }
 
+fn remove_dir_all_if_exists(path: &Path) -> io::Result<()> {
+    match fs::remove_dir_all(path) {
+        Ok(()) => Ok(()),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(err) => Err(err),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1181,7 +1189,13 @@ pub fn join_dev_conversation(
         ));
     }
 
-    fs::create_dir_all(&conversation_state_dir)?;
+    let staging_label = format!(".join-staging-{conversation_label}-{}", std::process::id());
+    let staging_state_dir = device_conversation_state_dir(device_label, &staging_label);
+    let staging_provider_storage_path = staging_state_dir.join("provider-storage.json");
+    let staging_conversation_summary_path = staging_state_dir.join("conversation-summary.json");
+    let staging_join_summary_path = staging_state_dir.join("join-summary.json");
+
+    remove_dir_all_if_exists(&staging_state_dir)?;
 
     let welcome_bytes = fs::read(welcome_artifact_path)?;
     let mut welcome_slice = welcome_bytes.as_slice();
@@ -1238,72 +1252,99 @@ pub fn join_dev_conversation(
     let group_id_ref = format!("sha256:{}", hex::encode(Sha256::digest(&group_id_bytes)));
     let group_id_len = group_id_bytes.len();
 
-    provider.save_storage_to_path(&provider_storage_path)?;
-
-    let mut reloaded_provider = CarbonStackSidecarProvider::default();
-    reloaded_provider.load_storage_from_path(&provider_storage_path)?;
-
-    let reloaded_group = MlsGroup::load(reloaded_provider.storage(), group.group_id())
-        .map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("joined conversation group reload failed: {err:?}"),
-            )
-        })?
-        .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                "joined conversation group not found in provider storage",
-            )
-        })?;
-
-    let reloaded_member_count = reloaded_group.members().count();
-    let reloaded_epoch = format!("{:?}", reloaded_group.epoch());
+    fs::create_dir_all(&staging_state_dir)?;
 
     let welcome_artifact_path_hint = welcome_artifact_path.to_string_lossy();
 
-    write_json_file(
-        &conversation_summary_path,
-        &JoinedConversationSummary {
-            summary_version: "joined-conversation-summary/v0",
-            device_label,
-            conversation_label,
-            state_scope: "dev-local-sidecar-state",
-            group_id_ref: &group_id_ref,
-            group_id_len,
-            provider_storage_written: true,
-            provider_storage_loaded: true,
-            group_reloadable: true,
-            joined: true,
-            member_count: reloaded_member_count,
-            epoch: &reloaded_epoch,
-            provider_storage_file: "provider-storage.json",
-            private_material_included: false,
-            warning: "dev-only OpenMLS joined conversation summary; not production secure storage",
-        },
-    )?;
+    let staged_materialization = (|| -> io::Result<(usize, String)> {
+        provider.save_storage_to_path(&staging_provider_storage_path)?;
 
-    write_json_file(
-        &join_summary_path,
-        &JoinSummary {
-            summary_version: "join-summary/v0",
-            device_label,
-            conversation_label,
-            state_scope: "dev-local-sidecar-state",
-            welcome_artifact_path_hint: &welcome_artifact_path_hint,
-            group_id_ref: &group_id_ref,
-            group_id_len,
-            provider_storage_written: true,
-            provider_storage_loaded: true,
-            group_reloadable: true,
-            joined: true,
-            member_count: reloaded_member_count,
-            epoch: &reloaded_epoch,
-            provider_storage_file: "provider-storage.json",
-            private_material_included: false,
-            warning: "dev-only OpenMLS join summary; Welcome consumed locally but not printed",
-        },
-    )?;
+        let mut reloaded_provider = CarbonStackSidecarProvider::default();
+        reloaded_provider.load_storage_from_path(&staging_provider_storage_path)?;
+
+        let reloaded_group = MlsGroup::load(reloaded_provider.storage(), group.group_id())
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("joined conversation group reload failed: {err:?}"),
+                )
+            })?
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "joined conversation group not found in provider storage",
+                )
+            })?;
+
+        let reloaded_member_count = reloaded_group.members().count();
+        let reloaded_epoch = format!("{:?}", reloaded_group.epoch());
+
+        write_json_file(
+            &staging_conversation_summary_path,
+            &JoinedConversationSummary {
+                summary_version: "joined-conversation-summary/v0",
+                device_label,
+                conversation_label,
+                state_scope: "dev-local-sidecar-state",
+                group_id_ref: &group_id_ref,
+                group_id_len,
+                provider_storage_written: true,
+                provider_storage_loaded: true,
+                group_reloadable: true,
+                joined: true,
+                member_count: reloaded_member_count,
+                epoch: &reloaded_epoch,
+                provider_storage_file: "provider-storage.json",
+                private_material_included: false,
+                warning: "dev-only OpenMLS joined conversation summary; not production secure storage",
+            },
+        )?;
+
+        write_json_file(
+            &staging_join_summary_path,
+            &JoinSummary {
+                summary_version: "join-summary/v0",
+                device_label,
+                conversation_label,
+                state_scope: "dev-local-sidecar-state",
+                welcome_artifact_path_hint: &welcome_artifact_path_hint,
+                group_id_ref: &group_id_ref,
+                group_id_len,
+                provider_storage_written: true,
+                provider_storage_loaded: true,
+                group_reloadable: true,
+                joined: true,
+                member_count: reloaded_member_count,
+                epoch: &reloaded_epoch,
+                provider_storage_file: "provider-storage.json",
+                private_material_included: false,
+                warning: "dev-only OpenMLS join summary; Welcome consumed locally but not printed",
+            },
+        )?;
+
+        Ok((reloaded_member_count, reloaded_epoch))
+    })();
+
+    let (_reloaded_member_count, _reloaded_epoch) = match staged_materialization {
+        Ok(result) => result,
+        Err(err) => {
+            let _ = remove_dir_all_if_exists(&staging_state_dir);
+            return Err(err);
+        }
+    };
+
+    if conversation_state_dir.exists() {
+        let _ = remove_dir_all_if_exists(&staging_state_dir);
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "joined conversation state already exists",
+        ));
+    }
+
+    if let Err(err) = fs::rename(&staging_state_dir, &conversation_state_dir) {
+        let _ = remove_dir_all_if_exists(&staging_state_dir);
+        return Err(err);
+    }
 
     Ok(ConversationJoinResult {
         device_label: device_label.to_string(),

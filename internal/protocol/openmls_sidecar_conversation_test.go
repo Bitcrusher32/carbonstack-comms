@@ -675,3 +675,142 @@ func TestOpenMLSSidecarConversationJoinWelcomeConsume(t *testing.T) {
 
 	assertNoSecretMaterialInStdout(t, duplicateOutput)
 }
+
+func TestOpenMLSSidecarConversationJoinInvalidWelcomeDoesNotPoisonFinalState(t *testing.T) {
+	removeOpenMLSSidecarState(t)
+
+	conversationLabel := "carbonstack-corrupt-welcome-conversation"
+
+	aliceIdentityOutput, aliceIdentityErr := runOpenMLSSidecar("identity-create", "--device-label", "carbonstack-alice-device")
+	if aliceIdentityErr != nil {
+		t.Fatalf("alice identity-create failed: %v\n%s", aliceIdentityErr, string(aliceIdentityOutput))
+	}
+
+	bobIdentityOutput, bobIdentityErr := runOpenMLSSidecar("identity-create", "--device-label", "carbonstack-bob-device")
+	if bobIdentityErr != nil {
+		t.Fatalf("bob identity-create failed: %v\n%s", bobIdentityErr, string(bobIdentityOutput))
+	}
+
+	bobBundleOutput, bobBundleErr := runOpenMLSSidecar("public-bundle-export", "--device-label", "carbonstack-bob-device", "--write-artifact")
+	if bobBundleErr != nil {
+		t.Fatalf("bob public-bundle-export failed: %v\n%s", bobBundleErr, string(bobBundleOutput))
+	}
+
+	bobBundleEnvelope := parseSidecarEnvelope(t, bobBundleOutput)
+	if !bobBundleEnvelope.OK {
+		t.Fatal("bob public-bundle-export ok = false, want true")
+	}
+	if bobBundleEnvelope.Data.KeyPackageArtifactPathHint == "" {
+		t.Fatal("bob public-bundle-export should return KeyPackage artifact path")
+	}
+
+	createOutput, createErr := runOpenMLSSidecar("conversation-create", "--device-label", "carbonstack-alice-device", "--conversation-label", conversationLabel)
+	if createErr != nil {
+		t.Fatalf("alice conversation-create failed: %v\n%s", createErr, string(createOutput))
+	}
+
+	addMemberOutput, addMemberErr := runOpenMLSSidecar(
+		"conversation-add-member",
+		"--device-label", "carbonstack-alice-device",
+		"--conversation-label", conversationLabel,
+		"--member-keypackage", bobBundleEnvelope.Data.KeyPackageArtifactPathHint,
+	)
+	if addMemberErr != nil {
+		t.Fatalf("conversation-add-member failed: %v\n%s", addMemberErr, string(addMemberOutput))
+	}
+
+	addMemberEnvelope := parseSidecarEnvelope(t, addMemberOutput)
+	if !addMemberEnvelope.OK {
+		t.Fatal("conversation-add-member ok = false, want true")
+	}
+	if addMemberEnvelope.Data.WelcomeArtifactPathHint == "" {
+		t.Fatal("conversation-add-member should return Welcome artifact path")
+	}
+
+	welcomeArtifactPath := filepath.Join(openMLSSidecarDir, addMemberEnvelope.Data.WelcomeArtifactPathHint)
+	validWelcome, readErr := os.ReadFile(filepath.Clean(welcomeArtifactPath))
+	if readErr != nil {
+		t.Fatalf("read valid Welcome artifact: %v", readErr)
+	}
+	if len(validWelcome) == 0 {
+		t.Fatal("valid Welcome artifact is empty")
+	}
+
+	writeErr := os.WriteFile(filepath.Clean(welcomeArtifactPath), []byte("not-a-valid-openmls-welcome-v0620c"), 0o600)
+	if writeErr != nil {
+		t.Fatalf("write corrupt Welcome artifact: %v", writeErr)
+	}
+
+	badJoinOutput, badJoinErr := runOpenMLSSidecar(
+		"conversation-join",
+		"--device-label", "carbonstack-bob-device",
+		"--conversation-label", conversationLabel,
+		"--welcome", addMemberEnvelope.Data.WelcomeArtifactPathHint,
+	)
+	assertExitCode(t, badJoinErr, 3)
+
+	badJoinEnvelope := parseSidecarEnvelope(t, badJoinOutput)
+	if badJoinEnvelope.OK {
+		t.Fatal("corrupt Welcome conversation-join ok = true, want false")
+	}
+	if badJoinEnvelope.Error == nil {
+		t.Fatal("corrupt Welcome conversation-join should include error")
+	}
+	if badJoinEnvelope.Error.Code != "welcome_invalid" {
+		t.Fatalf("corrupt Welcome error code = %q, want welcome_invalid", badJoinEnvelope.Error.Code)
+	}
+
+	bobConversationStatePath := filepath.Join(
+		openMLSSidecarDir,
+		".carbonstack-openmls-sidecar-state",
+		"dev",
+		"devices",
+		"carbonstack-bob-device",
+		"conversations",
+		conversationLabel,
+	)
+
+	if _, statErr := os.Stat(filepath.Clean(bobConversationStatePath)); !os.IsNotExist(statErr) {
+		t.Fatalf("corrupt Welcome join must not leave final conversation state at %s; statErr=%v", bobConversationStatePath, statErr)
+	}
+
+	bobConversationsParent := filepath.Dir(bobConversationStatePath)
+	if entries, readDirErr := os.ReadDir(filepath.Clean(bobConversationsParent)); readDirErr == nil {
+		for _, entry := range entries {
+			if strings.Contains(entry.Name(), "join-staging") {
+				t.Fatalf("corrupt Welcome join left staging directory %q under %s", entry.Name(), bobConversationsParent)
+			}
+		}
+	}
+
+	if writeErr := os.WriteFile(filepath.Clean(welcomeArtifactPath), validWelcome, 0o600); writeErr != nil {
+		t.Fatalf("restore valid Welcome artifact: %v", writeErr)
+	}
+
+	joinOutput, joinErr := runOpenMLSSidecar(
+		"conversation-join",
+		"--device-label", "carbonstack-bob-device",
+		"--conversation-label", conversationLabel,
+		"--welcome", addMemberEnvelope.Data.WelcomeArtifactPathHint,
+	)
+	if joinErr != nil {
+		t.Fatalf("restored Welcome conversation-join failed: %v\n%s", joinErr, string(joinOutput))
+	}
+
+	joinEnvelope := parseSidecarEnvelope(t, joinOutput)
+	if !joinEnvelope.OK {
+		t.Fatal("restored Welcome conversation-join ok = false, want true")
+	}
+	if !joinEnvelope.Data.Joined {
+		t.Fatal("restored Welcome conversation-join should report joined=true")
+	}
+	if !joinEnvelope.Data.GroupReloadable {
+		t.Fatal("restored Welcome conversation-join should report group_reloadable=true")
+	}
+
+	assertFileExists(t, filepath.Join(openMLSSidecarDir, joinEnvelope.Data.ConversationSummaryPathHint))
+	assertFileExists(t, filepath.Join(openMLSSidecarDir, joinEnvelope.Data.ProviderStoragePathHint))
+	assertFileExists(t, filepath.Join(openMLSSidecarDir, joinEnvelope.Data.JoinSummaryPathHint))
+	assertNoSecretMaterialInStdout(t, badJoinOutput)
+	assertNoSecretMaterialInStdout(t, joinOutput)
+}
