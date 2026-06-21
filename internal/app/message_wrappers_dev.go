@@ -208,6 +208,9 @@ func cmdMessageInboxDev(args []string) error {
 		}
 
 		fmt.Printf("from_device: %s\n", envelope.SenderDeviceID)
+		fmt.Printf("from_device_unverified: %s\n", envelope.SenderDeviceID)
+		fmt.Println("sender_identity_verified: false")
+		fmt.Println("warning: from_device is relay envelope metadata, not verified identity")
 		fmt.Printf("conversation: %s\n", openedResult.ConversationLabel)
 		fmt.Printf("message_label: %s\n", openedResult.MessageLabel)
 		fmt.Printf("plaintext_utf8: %s\n", openedResult.PlaintextUTF8)

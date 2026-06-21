@@ -355,6 +355,9 @@ func cmdOpenMLSInboxDev(args []string) error {
 		}
 
 		fmt.Printf("from_device: %s\n", envelope.SenderDeviceID)
+		fmt.Printf("from_device_unverified: %s\n", envelope.SenderDeviceID)
+		fmt.Println("sender_identity_verified: false")
+		fmt.Println("warning: from_device is relay envelope metadata, not verified identity")
 		fmt.Printf("content_type: %s\n", envelope.ContentType)
 		fmt.Printf("protocol_version: %s\n", envelope.ProtocolVersion)
 		fmt.Printf("sidecar_device_label: %s\n", openedResult.DeviceLabel)
