@@ -360,6 +360,10 @@ func TestOpenMLSConversationLoadCheckDevInvokesSidecarAndPrintsStableOutput(t *t
 		"sidecar_device_label: alice-device",
 		"sidecar_conversation_label: test-conversation",
 		"group_reloadable: true",
+		"provider_reloadable: true",
+		"summary_metadata_present: true",
+		"provider_storage_present: true",
+		"summary_metadata_warning: none",
 		"warning: dev/pre-alpha OpenMLS bootstrap path; not production conversation UX",
 	} {
 		if !strings.Contains(out, want) {

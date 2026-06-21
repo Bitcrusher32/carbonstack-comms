@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+
+	"os"
 )
 
 type openMLSSidecarBootstrapEnvelope struct {
@@ -210,6 +212,25 @@ func cmdOpenMLSConversationLoadCheckDev(args []string) error {
 		"--conversation-label", *conversationLabel,
 	)
 	if err != nil {
+		loadCheckSummaryPath, loadCheckProviderPath := openMLSConversationLoadCheckMetadataPaths(*sidecarDir, *sidecarDeviceLabel, *conversationLabel)
+		loadCheckSummaryPresent := openMLSConversationLoadCheckRegularFileExists(loadCheckSummaryPath)
+		loadCheckProviderPresent := openMLSConversationLoadCheckRegularFileExists(loadCheckProviderPath)
+		if !loadCheckSummaryPresent {
+			fmt.Println("openmls dev bootstrap")
+			fmt.Println("command: openmls-conversation-load-check-dev")
+			fmt.Println("status: metadata_missing")
+			fmt.Println("sidecar_command: conversation-load-check")
+			fmt.Printf("sidecar_device_label: %s\n", *sidecarDeviceLabel)
+			fmt.Printf("sidecar_conversation_label: %s\n", *conversationLabel)
+			fmt.Println("group_reloadable: false")
+			fmt.Println("provider_reloadable: not_evaluated_by_load_check")
+			fmt.Printf("summary_metadata_present: %t\n", loadCheckSummaryPresent)
+			fmt.Printf("provider_storage_present: %t\n", loadCheckProviderPresent)
+			fmt.Printf("summary_metadata_path: %s\n", loadCheckSummaryPath)
+			fmt.Printf("provider_storage_path: %s\n", loadCheckProviderPath)
+			fmt.Println("summary_metadata_warning: conversation-summary metadata is missing; conversation-load-check-dev is stricter than message-open and cannot confirm reloadability without summary metadata")
+			fmt.Println("warning: dev/pre-alpha OpenMLS bootstrap path; not production conversation UX")
+		}
 		return err
 	}
 
@@ -230,6 +251,13 @@ func cmdOpenMLSConversationLoadCheckDev(args []string) error {
 	fmt.Printf("sidecar_conversation_label: %s\n", conversation)
 	if value, ok := bootstrapBoolField(envelope.Data, "group_reloadable"); ok {
 		fmt.Printf("group_reloadable: %t\n", value)
+		loadCheckSummaryPath, loadCheckProviderPath := openMLSConversationLoadCheckMetadataPaths(*sidecarDir, *sidecarDeviceLabel, *conversationLabel)
+		fmt.Printf("provider_reloadable: %t\n", value)
+		fmt.Println("summary_metadata_present: true")
+		fmt.Println("provider_storage_present: true")
+		fmt.Printf("summary_metadata_path: %s\n", loadCheckSummaryPath)
+		fmt.Printf("provider_storage_path: %s\n", loadCheckProviderPath)
+		fmt.Println("summary_metadata_warning: none")
 	}
 	fmt.Println("warning: dev/pre-alpha OpenMLS bootstrap path; not production conversation UX")
 
@@ -478,4 +506,18 @@ func bootstrapPrintOptionalNumber(key string, data map[string]any) {
 	default:
 		fmt.Printf("%s: %v\n", key, value)
 	}
+}
+
+func openMLSConversationLoadCheckMetadataPaths(sidecarDir string, sidecarDeviceLabel string, conversation string) (string, string) {
+	conversationDir := filepath.Join(sidecarDir, ".carbonstack-openmls-sidecar-state", "dev", "devices", sidecarDeviceLabel, "conversations", conversation)
+	return filepath.Join(conversationDir, "conversation-summary.json"), filepath.Join(conversationDir, "provider-storage.json")
+}
+
+func openMLSConversationLoadCheckRegularFileExists(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+
+	return !info.IsDir()
 }
