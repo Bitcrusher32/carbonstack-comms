@@ -39,6 +39,10 @@ func TestStateAuditDevReportsDomainsAndDoesNotPrintContents(t *testing.T) {
 
 	for _, want := range []string{
 		"command: state-audit-dev",
+		"state_boundary_model_version: v0.6.29-state-boundary-v0",
+		"state_boundary_role: proto_substrate_inventory_check",
+		"proto_substrate: true",
+		"pq_tags_reserved_not_implemented: true",
 		"schema_version: carbonstack-comms-state-audit/v0",
 		"mutation_allowed: false",
 		"raw_secret_contents_printed: false",
@@ -49,7 +53,13 @@ func TestStateAuditDevReportsDomainsAndDoesNotPrintContents(t *testing.T) {
 		"domain: sidecar_generated_state",
 		"domain: sidecar_build_output",
 		"domain: local_cypher_db",
+		"authority_class: server_side_coordination_authority_inventory_only",
+		"cypher_inventory_only: true",
 		"classification: generated-dev-provider-state",
+		"authority_class: dev_runtime_authority_container",
+		"sensitivity_class: secret_bearing_safety_sensitive_dev_scope",
+		"no_silent_rule: no_silent_runtime_authority_regeneration",
+		"boundary_warning: dev_generated_state_not_production_vault",
 		"vault_class: generated_secret_state",
 		"future_vault_required: true",
 		"status: inspected",
@@ -94,6 +104,15 @@ func TestStateAuditDevJSONFormatIsMachineReadableAndDoesNotPrintContents(t *test
 	if report.Command != "state-audit-dev" {
 		t.Fatalf("command = %q", report.Command)
 	}
+	if report.StateBoundaryModelVersion != "v0.6.29-state-boundary-v0" {
+		t.Fatalf("state_boundary_model_version = %q", report.StateBoundaryModelVersion)
+	}
+	if !report.ProtoSubstrate {
+		t.Fatal("expected proto_substrate=true")
+	}
+	if !report.PQTagsReservedNotImpl {
+		t.Fatal("expected pq_tags_reserved_not_implemented=true")
+	}
 	if report.RawSecretContentsPrinted {
 		t.Fatal("JSON report claims raw secret contents were printed")
 	}
@@ -108,6 +127,15 @@ func TestStateAuditDevJSONFormatIsMachineReadableAndDoesNotPrintContents(t *test
 	}
 	if report.Domains[0].VaultClass == "" {
 		t.Fatal("expected vault_class in JSON report domain")
+	}
+	if report.Domains[0].AuthorityClass == "" {
+		t.Fatal("expected authority_class in JSON report domain")
+	}
+	if report.Domains[0].SensitivityClass == "" {
+		t.Fatal("expected sensitivity_class in JSON report domain")
+	}
+	if report.Domains[0].NoSilentRule == "" {
+		t.Fatal("expected no_silent_rule in JSON report domain")
 	}
 }
 
