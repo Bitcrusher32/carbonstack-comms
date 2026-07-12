@@ -2,6 +2,8 @@ package app
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -41,6 +43,59 @@ func scopedRelaySpaceRecordsForTest(
 	}
 
 	return envelopes
+}
+
+func TestMessageInboxDefaultScopedFetchPreservesUnsupportedEnvelope(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			wantPath := "/v0/relay-spaces/relay-space-1/devices/device-1/envelopes"
+			if r.URL.Path != wantPath {
+				t.Fatalf("request path = %q, want %q", r.URL.Path, wantPath)
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{
+				"relay_space_id": "relay-space-1",
+				"device_id": "device-1",
+				"envelopes": [{
+					"envelope_id": "unsupported-envelope-1",
+					"relay_space_id": "relay-space-1",
+					"sender_device_id": "sender-device",
+					"recipient_device_id": "device-1",
+					"content_type": "carbonstack.test.unsupported-normal-message.v0",
+					"protocol_version": "carbonstack-openmls-sidecar-v0",
+					"ciphertext_b64": "",
+					"payload_sha256": "",
+					"payload_size_bytes": 0,
+					"client_created_at": "",
+					"server_received_at": "",
+					"delivery_state": "queued"
+				}]
+			}`))
+		},
+	))
+	defer server.Close()
+
+	envelopes, err := relaySpaceOpenMLSArtifactInboxForMessageCommand(
+		client.New(server.URL),
+		"relay-space-1",
+		"device-1",
+		relay.ArtifactKindApplicationMessage,
+	)
+	if err != nil {
+		t.Fatalf("scoped message inbox fetch: %v", err)
+	}
+
+	if len(envelopes) != 1 {
+		t.Fatalf("envelope count = %d, want 1", len(envelopes))
+	}
+
+	if envelopes[0].ContentType != "carbonstack.test.unsupported-normal-message.v0" {
+		t.Fatalf(
+			"content type = %q, want unsupported envelope preserved",
+			envelopes[0].ContentType,
+		)
+	}
 }
 
 func TestMessageSendDevRejectsMissingRequiredFlags(t *testing.T) {

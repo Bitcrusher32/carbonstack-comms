@@ -15,7 +15,31 @@ import (
 )
 
 var submitRelaySpaceOpenMLSArtifactEnvelopeForMessageCommand = relay.SubmitRelaySpaceOpenMLSArtifactEnvelope
-var relaySpaceOpenMLSArtifactInboxForMessageCommand = relay.RelaySpaceOpenMLSArtifactInbox
+var relaySpaceOpenMLSArtifactInboxForMessageCommand = func(
+	c client.CypherClient,
+	relaySpaceID string,
+	deviceID string,
+	artifactKind string,
+) ([]client.RelaySpaceEnvelopeRecord, error) {
+	// RelaySpaceOpenMLSArtifactInbox deliberately filters to one exact
+	// artifact content type. The normal-message wrapper must instead inspect
+	// the whole Relay Space-scoped device inbox so unsupported content or
+	// protocol pairs remain visible for explicit no-ack classification.
+	if artifactKind != relay.ArtifactKindApplicationMessage {
+		return nil, fmt.Errorf(
+			"message inbox requires artifact kind %q, got %q",
+			relay.ArtifactKindApplicationMessage,
+			artifactKind,
+		)
+	}
+
+	inbox, err := c.RelaySpaceInbox(relaySpaceID, deviceID)
+	if err != nil {
+		return nil, err
+	}
+
+	return inbox.Envelopes, nil
+}
 var ackRelaySpaceEnvelopeForMessageCommand = func(
 	c client.CypherClient,
 	relaySpaceID string,
