@@ -10,15 +10,49 @@ import (
 	"git.bitcrusher32.win/bitcrusher32/carbonstack-comms/internal/relay"
 )
 
+func scopedRelaySpaceRecordsForTest(
+	relaySpaceID string,
+	inbox client.InboxResponse,
+) []client.RelaySpaceEnvelopeRecord {
+	envelopes := make(
+		[]client.RelaySpaceEnvelopeRecord,
+		0,
+		len(inbox.Envelopes),
+	)
+
+	for _, envelope := range inbox.Envelopes {
+		envelopes = append(
+			envelopes,
+			client.RelaySpaceEnvelopeRecord{
+				EnvelopeID:        envelope.EnvelopeID,
+				RelaySpaceID:      relaySpaceID,
+				SenderDeviceID:    envelope.SenderDeviceID,
+				RecipientDeviceID: envelope.RecipientDeviceID,
+				ContentType:       envelope.ContentType,
+				ProtocolVersion:   envelope.ProtocolVersion,
+				CiphertextB64:     envelope.CiphertextB64,
+				PayloadSHA256:     envelope.PayloadSHA256,
+				PayloadSizeBytes:  envelope.PayloadSizeBytes,
+				ClientCreatedAt:   envelope.ClientCreatedAt,
+				ServerReceivedAt:  envelope.ServerReceivedAt,
+				DeliveryState:     envelope.DeliveryState,
+			},
+		)
+	}
+
+	return envelopes
+}
+
 func TestMessageSendDevRejectsMissingRequiredFlags(t *testing.T) {
 	statePath := writeReadyState(t)
 
 	err := Run([]string{
 		"message-send-dev",
+		"--relay-space", "relay-space-1",
 		"--state", statePath,
 	})
 
-	if err == nil || !strings.Contains(err.Error(), "--to-device, --message, --sidecar-device-label, and --conversation are required") {
+	if err == nil || !strings.Contains(err.Error(), "--relay-space, --to-device, --message, --sidecar-device-label, and --conversation are required") {
 		t.Fatalf("expected missing required flags error, got %v", err)
 	}
 }
@@ -48,7 +82,7 @@ func TestMessageSendDevSendsWithOpinionatedOutput(t *testing.T) {
 		}, nil
 	}
 
-	submitOpenMLSArtifactEnvelopeForCommand = func(c client.CypherClient, senderDeviceID string, recipientDeviceID string, artifactKind string, submittedArtifactPath string, clientCreatedAt string) (client.SubmitEnvelopeResponse, error) {
+	submitRelaySpaceOpenMLSArtifactEnvelopeForMessageCommand = func(c client.CypherClient, relaySpaceID string, senderDeviceID string, recipientDeviceID string, artifactKind string, submittedArtifactPath string, clientCreatedAt string) (client.SubmitRelaySpaceEnvelopeResponse, error) {
 		if recipientDeviceID != "recipient-device" {
 			t.Fatalf("recipientDeviceID = %q", recipientDeviceID)
 		}
@@ -58,7 +92,7 @@ func TestMessageSendDevSendsWithOpinionatedOutput(t *testing.T) {
 		if submittedArtifactPath != artifactPath {
 			t.Fatalf("submittedArtifactPath = %q", submittedArtifactPath)
 		}
-		return client.SubmitEnvelopeResponse{
+		return client.SubmitRelaySpaceEnvelopeResponse{
 			EnvelopeID:       "env-message-wrapper-1",
 			DeliveryState:    "queued",
 			ServerReceivedAt: "2026-06-15T00:00:00Z",
@@ -70,6 +104,7 @@ func TestMessageSendDevSendsWithOpinionatedOutput(t *testing.T) {
 	output, err := captureOpenMLSRuntimeOutput(func() error {
 		return Run([]string{
 			"message-send-dev",
+			"--relay-space", "relay-space-1",
 			"--state", statePath,
 			"--to-device", "recipient-device",
 			"--sidecar-device-label", "carbonstack-alice-device",
@@ -86,7 +121,7 @@ func TestMessageSendDevSendsWithOpinionatedOutput(t *testing.T) {
 		"message sent",
 		"command: message-send-dev",
 		"implementation_path: openmls-send-dev",
-		"backend: OpenMLS sidecar + Cypher application-message envelope",
+		"backend: OpenMLS sidecar + Cypher Relay Space-scoped application-message envelope",
 		"status: sent",
 		"recipient_device_id: recipient-device",
 		"conversation: carbonstack-test-conversation",
@@ -122,12 +157,13 @@ func TestMessageSendDevReturnsSubmitFailureAfterProtectSucceeds(t *testing.T) {
 		}, nil
 	}
 
-	submitOpenMLSArtifactEnvelopeForCommand = func(c client.CypherClient, senderDeviceID string, recipientDeviceID string, artifactKind string, submittedArtifactPath string, clientCreatedAt string) (client.SubmitEnvelopeResponse, error) {
-		return client.SubmitEnvelopeResponse{}, errors.New("submit failed")
+	submitRelaySpaceOpenMLSArtifactEnvelopeForMessageCommand = func(c client.CypherClient, relaySpaceID string, senderDeviceID string, recipientDeviceID string, artifactKind string, submittedArtifactPath string, clientCreatedAt string) (client.SubmitRelaySpaceEnvelopeResponse, error) {
+		return client.SubmitRelaySpaceEnvelopeResponse{}, errors.New("submit failed")
 	}
 
 	err := Run([]string{
 		"message-send-dev",
+		"--relay-space", "relay-space-1",
 		"--state", statePath,
 		"--to-device", "recipient-device",
 		"--sidecar-device-label", "carbonstack-alice-device",
@@ -146,8 +182,8 @@ func TestMessageInboxDevReportsEmptyInboxWithoutOpenOrAck(t *testing.T) {
 	restore := stubInboxDevHooks(t)
 	defer restore()
 
-	inboxForCommand = func(c client.CypherClient, deviceID string) (client.InboxResponse, error) {
-		return client.InboxResponse{DeviceID: deviceID}, nil
+	relaySpaceOpenMLSArtifactInboxForMessageCommand = func(c client.CypherClient, relaySpaceID string, deviceID string, artifactKind string) ([]client.RelaySpaceEnvelopeRecord, error) {
+		return nil, nil
 	}
 
 	openCalled := false
@@ -157,14 +193,15 @@ func TestMessageInboxDevReportsEmptyInboxWithoutOpenOrAck(t *testing.T) {
 	}
 
 	ackCalled := false
-	ackEnvelopeForCommand = func(c client.CypherClient, envelopeID string, recipientDeviceID string) (client.AckEnvelopeResponse, error) {
+	ackRelaySpaceEnvelopeForMessageCommand = func(c client.CypherClient, relaySpaceID string, envelopeID string, recipientDeviceID string) (client.AckRelaySpaceEnvelopeResponse, error) {
 		ackCalled = true
-		return client.AckEnvelopeResponse{}, nil
+		return client.AckRelaySpaceEnvelopeResponse{}, nil
 	}
 
 	output, err := captureOpenMLSRuntimeOutput(func() error {
 		return Run([]string{
 			"message-inbox-dev",
+			"--relay-space", "relay-space-1",
 			"--state", statePath,
 			"--sidecar-device-label", "carbonstack-bob-device",
 			"--conversation", "carbonstack-test-conversation",
@@ -186,7 +223,7 @@ func TestMessageInboxDevReportsEmptyInboxWithoutOpenOrAck(t *testing.T) {
 		"message inbox",
 		"command: message-inbox-dev",
 		"implementation_path: openmls-inbox-dev",
-		"backend: OpenMLS sidecar + Cypher application-message envelope",
+		"backend: OpenMLS sidecar + Cypher Relay Space-scoped application-message envelope",
 		"queued_envelopes: 0",
 		"ack_requested: true",
 		"message inbox summary",
@@ -207,7 +244,35 @@ func TestMessageInboxDevOpensAndAcksWithOpinionatedOutput(t *testing.T) {
 	restore := stubInboxDevHooks(t)
 	defer restore()
 
-	inboxForCommand = oneOpenMLSInboxResponse
+	relaySpaceOpenMLSArtifactInboxForMessageCommand = func(
+		c client.CypherClient,
+		relaySpaceID string,
+		deviceID string,
+		artifactKind string,
+	) ([]client.RelaySpaceEnvelopeRecord, error) {
+		inbox, err := oneOpenMLSInboxResponse(c, deviceID)
+		if err != nil {
+			return nil, err
+		}
+		envelopes := make([]client.RelaySpaceEnvelopeRecord, 0, len(inbox.Envelopes))
+		for _, envelope := range inbox.Envelopes {
+			envelopes = append(envelopes, client.RelaySpaceEnvelopeRecord{
+				EnvelopeID:        envelope.EnvelopeID,
+				RelaySpaceID:      relaySpaceID,
+				SenderDeviceID:    envelope.SenderDeviceID,
+				RecipientDeviceID: envelope.RecipientDeviceID,
+				ContentType:       envelope.ContentType,
+				ProtocolVersion:   envelope.ProtocolVersion,
+				CiphertextB64:     envelope.CiphertextB64,
+				PayloadSHA256:     envelope.PayloadSHA256,
+				PayloadSizeBytes:  envelope.PayloadSizeBytes,
+				ClientCreatedAt:   envelope.ClientCreatedAt,
+				ServerReceivedAt:  envelope.ServerReceivedAt,
+				DeliveryState:     envelope.DeliveryState,
+			})
+		}
+		return envelopes, nil
+	}
 
 	runOpenMLSMessageOpenForCommand = func(sidecarDir string, deviceLabel string, conversationLabel string, messageLabel string, messageArtifactPath string) (openMLSMessageOpenResult, error) {
 		if messageLabel != "message-wrapper-inbox-1" {
@@ -223,8 +288,8 @@ func TestMessageInboxDevOpensAndAcksWithOpinionatedOutput(t *testing.T) {
 		}, nil
 	}
 
-	ackEnvelopeForCommand = func(c client.CypherClient, envelopeID string, recipientDeviceID string) (client.AckEnvelopeResponse, error) {
-		return client.AckEnvelopeResponse{
+	ackRelaySpaceEnvelopeForMessageCommand = func(c client.CypherClient, relaySpaceID string, envelopeID string, recipientDeviceID string) (client.AckRelaySpaceEnvelopeResponse, error) {
+		return client.AckRelaySpaceEnvelopeResponse{
 			EnvelopeID:     envelopeID,
 			DeliveryState:  "acknowledged",
 			AcknowledgedAt: "2026-06-15T00:00:00Z",
@@ -234,6 +299,7 @@ func TestMessageInboxDevOpensAndAcksWithOpinionatedOutput(t *testing.T) {
 	output, err := captureOpenMLSRuntimeOutput(func() error {
 		return Run([]string{
 			"message-inbox-dev",
+			"--relay-space", "relay-space-1",
 			"--state", statePath,
 			"--sidecar-device-label", "carbonstack-bob-device",
 			"--conversation", "carbonstack-test-conversation",
@@ -276,7 +342,35 @@ func TestMessageInboxDevReportsAckFailureAfterOpenSuccess(t *testing.T) {
 	restore := stubInboxDevHooks(t)
 	defer restore()
 
-	inboxForCommand = oneOpenMLSInboxResponse
+	relaySpaceOpenMLSArtifactInboxForMessageCommand = func(
+		c client.CypherClient,
+		relaySpaceID string,
+		deviceID string,
+		artifactKind string,
+	) ([]client.RelaySpaceEnvelopeRecord, error) {
+		inbox, err := oneOpenMLSInboxResponse(c, deviceID)
+		if err != nil {
+			return nil, err
+		}
+		envelopes := make([]client.RelaySpaceEnvelopeRecord, 0, len(inbox.Envelopes))
+		for _, envelope := range inbox.Envelopes {
+			envelopes = append(envelopes, client.RelaySpaceEnvelopeRecord{
+				EnvelopeID:        envelope.EnvelopeID,
+				RelaySpaceID:      relaySpaceID,
+				SenderDeviceID:    envelope.SenderDeviceID,
+				RecipientDeviceID: envelope.RecipientDeviceID,
+				ContentType:       envelope.ContentType,
+				ProtocolVersion:   envelope.ProtocolVersion,
+				CiphertextB64:     envelope.CiphertextB64,
+				PayloadSHA256:     envelope.PayloadSHA256,
+				PayloadSizeBytes:  envelope.PayloadSizeBytes,
+				ClientCreatedAt:   envelope.ClientCreatedAt,
+				ServerReceivedAt:  envelope.ServerReceivedAt,
+				DeliveryState:     envelope.DeliveryState,
+			})
+		}
+		return envelopes, nil
+	}
 
 	runOpenMLSMessageOpenForCommand = func(sidecarDir string, deviceLabel string, conversationLabel string, messageLabel string, messageArtifactPath string) (openMLSMessageOpenResult, error) {
 		return openMLSMessageOpenResult{
@@ -289,13 +383,14 @@ func TestMessageInboxDevReportsAckFailureAfterOpenSuccess(t *testing.T) {
 		}, nil
 	}
 
-	ackEnvelopeForCommand = func(c client.CypherClient, envelopeID string, recipientDeviceID string) (client.AckEnvelopeResponse, error) {
-		return client.AckEnvelopeResponse{}, errors.New("ack failed")
+	ackRelaySpaceEnvelopeForMessageCommand = func(c client.CypherClient, relaySpaceID string, envelopeID string, recipientDeviceID string) (client.AckRelaySpaceEnvelopeResponse, error) {
+		return client.AckRelaySpaceEnvelopeResponse{}, errors.New("ack failed")
 	}
 
 	output, err := captureOpenMLSRuntimeOutput(func() error {
 		return Run([]string{
 			"message-inbox-dev",
+			"--relay-space", "relay-space-1",
 			"--state", statePath,
 			"--sidecar-device-label", "carbonstack-bob-device",
 			"--conversation", "carbonstack-test-conversation",
@@ -333,13 +428,14 @@ func TestMessageSendDevStrictBlocksUnknownRecipientBeforeProtectOrSubmit(t *test
 		protectCalled = true
 		return openMLSMessageProtectResult{}, nil
 	}
-	submitOpenMLSArtifactEnvelopeForCommand = func(c client.CypherClient, senderDeviceID string, recipientDeviceID string, artifactKind string, submittedArtifactPath string, clientCreatedAt string) (client.SubmitEnvelopeResponse, error) {
+	submitRelaySpaceOpenMLSArtifactEnvelopeForMessageCommand = func(c client.CypherClient, relaySpaceID string, senderDeviceID string, recipientDeviceID string, artifactKind string, submittedArtifactPath string, clientCreatedAt string) (client.SubmitRelaySpaceEnvelopeResponse, error) {
 		submitCalled = true
-		return client.SubmitEnvelopeResponse{}, nil
+		return client.SubmitRelaySpaceEnvelopeResponse{}, nil
 	}
 
 	err := Run([]string{
 		"message-send-dev",
+		"--relay-space", "relay-space-1",
 		"--state", statePath,
 		"--to-device", "unknown-recipient-device",
 		"--sidecar-device-label", "carbonstack-alice-device",
@@ -375,12 +471,12 @@ func TestMessageSendDevResolvesRelativeArtifactHintAgainstSidecarDir(t *testing.
 		}, nil
 	}
 
-	submitOpenMLSArtifactEnvelopeForCommand = func(c client.CypherClient, senderDeviceID string, recipientDeviceID string, artifactKind string, submittedArtifactPath string, clientCreatedAt string) (client.SubmitEnvelopeResponse, error) {
+	submitRelaySpaceOpenMLSArtifactEnvelopeForMessageCommand = func(c client.CypherClient, relaySpaceID string, senderDeviceID string, recipientDeviceID string, artifactKind string, submittedArtifactPath string, clientCreatedAt string) (client.SubmitRelaySpaceEnvelopeResponse, error) {
 		want := filepath.Join(sidecarDir, "relative/application-message.bin")
 		if submittedArtifactPath != want {
 			t.Fatalf("submittedArtifactPath = %q, want %q", submittedArtifactPath, want)
 		}
-		return client.SubmitEnvelopeResponse{
+		return client.SubmitRelaySpaceEnvelopeResponse{
 			EnvelopeID:       "env-relative-artifact",
 			DeliveryState:    "queued",
 			ServerReceivedAt: "2026-06-05T00:00:00Z",
@@ -391,6 +487,7 @@ func TestMessageSendDevResolvesRelativeArtifactHintAgainstSidecarDir(t *testing.
 
 	err := Run([]string{
 		"message-send-dev",
+		"--relay-space", "relay-space-1",
 		"--state", statePath,
 		"--to-device", "recipient-device",
 		"--sidecar-dir", sidecarDir,
@@ -409,8 +506,8 @@ func TestMessageInboxDevSkipsUnsupportedEnvelopeWithoutOpenOrAck(t *testing.T) {
 	restore := stubInboxDevHooks(t)
 	defer restore()
 
-	inboxForCommand = func(c client.CypherClient, deviceID string) (client.InboxResponse, error) {
-		return client.InboxResponse{
+	relaySpaceOpenMLSArtifactInboxForMessageCommand = func(c client.CypherClient, relaySpaceID string, deviceID string, artifactKind string) ([]client.RelaySpaceEnvelopeRecord, error) {
+		return scopedRelaySpaceRecordsForTest(relaySpaceID, client.InboxResponse{
 			DeviceID: deviceID,
 			Envelopes: []client.EnvelopeRecord{{
 				EnvelopeID:        "stub-envelope",
@@ -419,7 +516,7 @@ func TestMessageInboxDevSkipsUnsupportedEnvelopeWithoutOpenOrAck(t *testing.T) {
 				ContentType:       "carbonstack.message.text.stub.v0",
 				ProtocolVersion:   "stub-v0",
 			}},
-		}, nil
+		}), nil
 	}
 
 	openCalled := false
@@ -429,15 +526,16 @@ func TestMessageInboxDevSkipsUnsupportedEnvelopeWithoutOpenOrAck(t *testing.T) {
 		openCalled = true
 		return openMLSMessageOpenResult{}, nil
 	}
-	ackEnvelopeForCommand = func(c client.CypherClient, envelopeID string, recipientDeviceID string) (client.AckEnvelopeResponse, error) {
+	ackRelaySpaceEnvelopeForMessageCommand = func(c client.CypherClient, relaySpaceID string, envelopeID string, recipientDeviceID string) (client.AckRelaySpaceEnvelopeResponse, error) {
 		ackCalled = true
-		return client.AckEnvelopeResponse{}, nil
+		return client.AckRelaySpaceEnvelopeResponse{}, nil
 	}
 
 	var err error
 	output := captureOutput(func() {
 		err = Run([]string{
 			"message-inbox-dev",
+			"--relay-space", "relay-space-1",
 			"--state", statePath,
 			"--sidecar-device-label", "carbonstack-bob-device",
 			"--conversation", "carbonstack-test-conversation",
@@ -473,22 +571,51 @@ func TestMessageInboxDevReportsMessageOpenFailureWithoutAck(t *testing.T) {
 	restore := stubInboxDevHooks(t)
 	defer restore()
 
-	inboxForCommand = oneOpenMLSInboxResponse
+	relaySpaceOpenMLSArtifactInboxForMessageCommand = func(
+		c client.CypherClient,
+		relaySpaceID string,
+		deviceID string,
+		artifactKind string,
+	) ([]client.RelaySpaceEnvelopeRecord, error) {
+		inbox, err := oneOpenMLSInboxResponse(c, deviceID)
+		if err != nil {
+			return nil, err
+		}
+		envelopes := make([]client.RelaySpaceEnvelopeRecord, 0, len(inbox.Envelopes))
+		for _, envelope := range inbox.Envelopes {
+			envelopes = append(envelopes, client.RelaySpaceEnvelopeRecord{
+				EnvelopeID:        envelope.EnvelopeID,
+				RelaySpaceID:      relaySpaceID,
+				SenderDeviceID:    envelope.SenderDeviceID,
+				RecipientDeviceID: envelope.RecipientDeviceID,
+				ContentType:       envelope.ContentType,
+				ProtocolVersion:   envelope.ProtocolVersion,
+				CiphertextB64:     envelope.CiphertextB64,
+				PayloadSHA256:     envelope.PayloadSHA256,
+				PayloadSizeBytes:  envelope.PayloadSizeBytes,
+				ClientCreatedAt:   envelope.ClientCreatedAt,
+				ServerReceivedAt:  envelope.ServerReceivedAt,
+				DeliveryState:     envelope.DeliveryState,
+			})
+		}
+		return envelopes, nil
+	}
 
 	runOpenMLSMessageOpenForCommand = func(sidecarDir string, deviceLabel string, conversationLabel string, messageLabel string, messageArtifactPath string) (openMLSMessageOpenResult, error) {
 		return openMLSMessageOpenResult{}, errors.New("message-open failed")
 	}
 
 	ackCalled := false
-	ackEnvelopeForCommand = func(c client.CypherClient, envelopeID string, recipientDeviceID string) (client.AckEnvelopeResponse, error) {
+	ackRelaySpaceEnvelopeForMessageCommand = func(c client.CypherClient, relaySpaceID string, envelopeID string, recipientDeviceID string) (client.AckRelaySpaceEnvelopeResponse, error) {
 		ackCalled = true
-		return client.AckEnvelopeResponse{}, nil
+		return client.AckRelaySpaceEnvelopeResponse{}, nil
 	}
 
 	var err error
 	output := captureOutput(func() {
 		err = Run([]string{
 			"message-inbox-dev",
+			"--relay-space", "relay-space-1",
 			"--state", statePath,
 			"--sidecar-device-label", "carbonstack-bob-device",
 			"--conversation", "carbonstack-test-conversation",

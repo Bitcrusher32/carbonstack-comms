@@ -14,9 +14,43 @@ import (
 	"git.bitcrusher32.win/bitcrusher32/carbonstack-comms/internal/trust"
 )
 
+var submitRelaySpaceOpenMLSArtifactEnvelopeForMessageCommand = relay.SubmitRelaySpaceOpenMLSArtifactEnvelope
+var relaySpaceOpenMLSArtifactInboxForMessageCommand = relay.RelaySpaceOpenMLSArtifactInbox
+var ackRelaySpaceEnvelopeForMessageCommand = func(
+	c client.CypherClient,
+	relaySpaceID string,
+	envelopeID string,
+	recipientDeviceID string,
+) (client.AckRelaySpaceEnvelopeResponse, error) {
+	return c.AckRelaySpaceEnvelope(
+		relaySpaceID,
+		envelopeID,
+		recipientDeviceID,
+	)
+}
+
+func relaySpaceEnvelopeAsUnscopedRecord(
+	envelope client.RelaySpaceEnvelopeRecord,
+) client.EnvelopeRecord {
+	return client.EnvelopeRecord{
+		EnvelopeID:        envelope.EnvelopeID,
+		SenderDeviceID:    envelope.SenderDeviceID,
+		RecipientDeviceID: envelope.RecipientDeviceID,
+		ContentType:       envelope.ContentType,
+		ProtocolVersion:   envelope.ProtocolVersion,
+		CiphertextB64:     envelope.CiphertextB64,
+		PayloadSHA256:     envelope.PayloadSHA256,
+		PayloadSizeBytes:  envelope.PayloadSizeBytes,
+		ClientCreatedAt:   envelope.ClientCreatedAt,
+		ServerReceivedAt:  envelope.ServerReceivedAt,
+		DeliveryState:     envelope.DeliveryState,
+	}
+}
+
 func cmdMessageSendDev(args []string) error {
 	fs := flag.NewFlagSet("message-send-dev", flag.ExitOnError)
 	statePath := fs.String("state", state.DefaultStatePath, "local state file path")
+	relaySpaceID := fs.String("relay-space", "", "Relay Space ID")
 	toDevice := fs.String("to-device", "", "recipient Cypher device ID")
 	message := fs.String("message", "", "plaintext message text")
 	strict := fs.Bool("strict", false, "block sending to unknown, unverified, or changed devices")
@@ -28,8 +62,8 @@ func cmdMessageSendDev(args []string) error {
 		return err
 	}
 
-	if *toDevice == "" || *message == "" || *sidecarDeviceLabel == "" || *conversationLabel == "" {
-		return errors.New("--to-device, --message, --sidecar-device-label, and --conversation are required")
+	if strings.TrimSpace(*relaySpaceID) == "" || *toDevice == "" || *message == "" || *sidecarDeviceLabel == "" || *conversationLabel == "" {
+		return errors.New("--relay-space, --to-device, --message, --sidecar-device-label, and --conversation are required")
 	}
 
 	s, err := state.RequireReadyDevice(*statePath)
@@ -71,8 +105,9 @@ func cmdMessageSendDev(args []string) error {
 	}
 
 	c := client.New(s.ServerURL)
-	resp, err := submitOpenMLSArtifactEnvelopeForCommand(
+	resp, err := submitRelaySpaceOpenMLSArtifactEnvelopeForMessageCommand(
 		c,
+		*relaySpaceID,
 		s.DeviceID,
 		*toDevice,
 		relay.ArtifactKindApplicationMessage,
@@ -86,8 +121,9 @@ func cmdMessageSendDev(args []string) error {
 	fmt.Println("message sent")
 	fmt.Println("command: message-send-dev")
 	fmt.Println("implementation_path: openmls-send-dev")
-	fmt.Println("backend: OpenMLS sidecar + Cypher application-message envelope")
+	fmt.Println("backend: OpenMLS sidecar + Cypher Relay Space-scoped application-message envelope")
 	fmt.Printf("status: sent\n")
+	fmt.Printf("relay_space_id: %s\n", *relaySpaceID)
 	fmt.Printf("recipient_device_id: %s\n", *toDevice)
 	fmt.Printf("conversation: %s\n", protect.ConversationLabel)
 	fmt.Printf("message_label: %s\n", protect.MessageLabel)
@@ -102,6 +138,7 @@ func cmdMessageSendDev(args []string) error {
 func cmdMessageInboxDev(args []string) error {
 	fs := flag.NewFlagSet("message-inbox-dev", flag.ExitOnError)
 	statePath := fs.String("state", state.DefaultStatePath, "local state file path")
+	relaySpaceID := fs.String("relay-space", "", "Relay Space ID")
 	sidecarDir := fs.String("sidecar-dir", defaultOpenMLSSidecarDir, "OpenMLS sidecar directory")
 	sidecarDeviceLabel := fs.String("sidecar-device-label", "", "recipient OpenMLS sidecar device label")
 	conversationLabel := fs.String("conversation", "", "OpenMLS sidecar conversation label")
@@ -112,8 +149,8 @@ func cmdMessageInboxDev(args []string) error {
 		return err
 	}
 
-	if *sidecarDeviceLabel == "" || *conversationLabel == "" {
-		return errors.New("--sidecar-device-label and --conversation are required")
+	if strings.TrimSpace(*relaySpaceID) == "" || *sidecarDeviceLabel == "" || *conversationLabel == "" {
+		return errors.New("--relay-space, --sidecar-device-label, and --conversation are required")
 	}
 	if *limit < 1 {
 		return errors.New("--limit must be >= 1")
@@ -125,7 +162,12 @@ func cmdMessageInboxDev(args []string) error {
 	}
 
 	c := client.New(s.ServerURL)
-	inbox, err := inboxForCommand(c, s.DeviceID)
+	envelopes, err := relaySpaceOpenMLSArtifactInboxForMessageCommand(
+		c,
+		*relaySpaceID,
+		s.DeviceID,
+		relay.ArtifactKindApplicationMessage,
+	)
 	if err != nil {
 		return err
 	}
@@ -133,9 +175,10 @@ func cmdMessageInboxDev(args []string) error {
 	fmt.Println("message inbox")
 	fmt.Println("command: message-inbox-dev")
 	fmt.Println("implementation_path: openmls-inbox-dev")
-	fmt.Println("backend: OpenMLS sidecar + Cypher application-message envelope")
-	fmt.Printf("device_id: %s\n", inbox.DeviceID)
-	fmt.Printf("queued_envelopes: %d\n", len(inbox.Envelopes))
+	fmt.Println("backend: OpenMLS sidecar + Cypher Relay Space-scoped application-message envelope")
+	fmt.Printf("relay_space_id: %s\n", *relaySpaceID)
+	fmt.Printf("device_id: %s\n", s.DeviceID)
+	fmt.Printf("queued_envelopes: %d\n", len(envelopes))
 	fmt.Printf("limit: %d\n", *limit)
 	fmt.Printf("ack_requested: %t\n", *ack)
 	fmt.Println("warning: dev/pre-alpha OpenMLS message wrapper; not production messaging UX")
@@ -145,7 +188,7 @@ func cmdMessageInboxDev(args []string) error {
 	openFailures := 0
 	ackFailures := 0
 
-	for i, envelope := range inbox.Envelopes {
+	for i, envelope := range envelopes {
 		if opened >= *limit {
 			break
 		}
@@ -164,7 +207,10 @@ func cmdMessageInboxDev(args []string) error {
 			label = "inbox-" + strconv.Itoa(opened+1)
 		}
 
-		artifactPath, err := writeOpenMLSInboxDevArtifact(envelope, i)
+		artifactPath, err := writeOpenMLSInboxDevArtifact(
+			relaySpaceEnvelopeAsUnscopedRecord(envelope),
+			i,
+		)
 		if err != nil {
 			openFailures++
 			fmt.Println()
@@ -196,7 +242,12 @@ func cmdMessageInboxDev(args []string) error {
 		fmt.Printf("envelope_id: %s\n", envelope.EnvelopeID)
 
 		if *ack {
-			ackResp, err := ackEnvelopeForCommand(c, envelope.EnvelopeID, s.DeviceID)
+			ackResp, err := ackRelaySpaceEnvelopeForMessageCommand(
+				c,
+				*relaySpaceID,
+				envelope.EnvelopeID,
+				s.DeviceID,
+			)
 			if err != nil {
 				ackFailures++
 				fmt.Printf("ack_error: %v\n", err)
