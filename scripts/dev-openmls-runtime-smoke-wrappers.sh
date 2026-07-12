@@ -238,9 +238,101 @@ run_comms openmls-conversation-load-check-dev \
 cat "$bob_load_out"
 grep -q "group_reloadable: true" "$bob_load_out" || fail "Bob conversation load-check did not report group_reloadable: true"
 
+log "Create Relay Space and register active routing members for scoped normal-message proof"
+relay_space_id="wrapper-runtime-relay-space"
+
+alice_account_id="$(python3 - "$alice_state" <<'PYCHECK'
+import json
+import sys
+data = json.loads(open(sys.argv[1], "r", encoding="utf-8").read())
+value = data.get("account_id", "")
+if not value:
+    raise SystemExit("alice state missing account_id")
+print(value)
+PYCHECK
+)"
+
+bob_account_id="$(python3 - "$bob_state" <<'PYCHECK'
+import json
+import sys
+data = json.loads(open(sys.argv[1], "r", encoding="utf-8").read())
+value = data.get("account_id", "")
+if not value:
+    raise SystemExit("bob state missing account_id")
+print(value)
+PYCHECK
+)"
+
+relay_space_create_body="$(python3 - \
+  "$relay_space_id" \
+  "$alice_account_id" \
+  "$alice_device_id" <<'PYCHECK'
+import json
+import sys
+print(json.dumps({
+    "relay_space_id": sys.argv[1],
+    "display_label": "wrapper runtime scoped message proof",
+    "created_by_account_id": sys.argv[2],
+    "created_by_device_id": sys.argv[3],
+}))
+PYCHECK
+)"
+
+curl -fsS \
+  -X POST \
+  -H "Content-Type: application/json" \
+  --data "$relay_space_create_body" \
+  "$cypher_url/v0/relay-spaces" \
+  > "$work_dir/relay-space-create.json"
+
+register_relay_member() {
+  account_id="$1"
+  device_id="$2"
+  routing_member_id="$3"
+  display_label="$4"
+
+  member_body="$(python3 - \
+    "$routing_member_id" \
+    "$account_id" \
+    "$device_id" \
+    "$display_label" <<'PYCHECK'
+import json
+import sys
+print(json.dumps({
+    "routing_member_id": sys.argv[1],
+    "account_id": sys.argv[2],
+    "device_id": sys.argv[3],
+    "display_label": sys.argv[4],
+    "state": "active",
+}))
+PYCHECK
+)"
+
+  curl -fsS \
+    -X POST \
+    -H "Content-Type: application/json" \
+    --data "$member_body" \
+    "$cypher_url/v0/relay-spaces/$relay_space_id/members"
+}
+
+register_relay_member \
+  "$alice_account_id" \
+  "$alice_device_id" \
+  "wrapper-runtime-alice-member" \
+  "wrapper runtime Alice" \
+  > "$work_dir/relay-space-alice-member.json"
+
+register_relay_member \
+  "$bob_account_id" \
+  "$bob_device_id" \
+  "wrapper-runtime-bob-member" \
+  "wrapper runtime Bob" \
+  > "$work_dir/relay-space-bob-member.json"
+
 log "Send application message through Comms message-send-dev"
 send_out="$work_dir/message-send-dev.txt"
 run_comms message-send-dev \
+  --relay-space "$relay_space_id" \
   --state "$alice_state" \
   --to-device "$bob_device_id" \
   --sidecar-device-label "$alice_label" \
@@ -253,13 +345,15 @@ cat "$send_out"
 grep -q "status: sent" "$send_out" || fail "message-send-dev did not report status: sent"
 grep -q "command: message-send-dev" "$send_out" || fail "message-send-dev output did not identify wrapper command"
 grep -q "implementation_path: openmls-send-dev" "$send_out" || fail "message-send-dev output did not identify OpenMLS implementation path"
-grep -q "backend: OpenMLS sidecar + Cypher application-message envelope" "$send_out" || fail "message-send-dev output did not identify backend"
+grep -q "backend: OpenMLS sidecar + Cypher Relay Space-scoped application-message envelope" "$send_out" || fail "message-send-dev output did not identify scoped backend"
+grep -q "relay_space_id: $relay_space_id" "$send_out" || fail "message-send-dev output did not report Relay Space"
 grep -q "payload_sha256:" "$send_out" || fail "message-send-dev output did not report payload hash"
 grep -q "warning: dev/pre-alpha OpenMLS message wrapper; not production messaging UX" "$send_out" || fail "message-send-dev output did not preserve dev/pre-alpha warning"
 
 log "Open and ack application message through Comms message-inbox-dev"
 inbox_out="$work_dir/message-inbox-dev.txt"
 run_comms message-inbox-dev \
+  --relay-space "$relay_space_id" \
   --state "$bob_state" \
   --sidecar-device-label "$bob_label" \
   --conversation "$conversation_label" \
@@ -275,7 +369,7 @@ grep -q "acked: true" "$inbox_out" || fail "message-inbox-dev did not ack after 
 
 log "Verify Bob inbox is empty after ack"
 after_ack="$work_dir/bob-inbox-after-ack.json"
-curl -fsS "$cypher_url/v0/devices/$bob_device_id/envelopes" > "$after_ack"
+curl -fsS "$cypher_url/v0/relay-spaces/$relay_space_id/devices/$bob_device_id/envelopes" > "$after_ack"
 
 queued_after_ack="$(python3 - "$after_ack" <<'PYCHECK'
 import json
@@ -291,7 +385,7 @@ if [ "$queued_after_ack" != "0" ]; then
 fi
 
 log "PASS: wrapper-based dev runtime OpenMLS CLI smoke proof"
-printf 'proof: openmls-*-dev bootstrap wrappers -> message-send-dev -> Cypher -> message-inbox-dev --ack\n'
+printf 'proof: openmls-*-dev bootstrap wrappers -> Relay Space membership -> scoped message-send-dev -> Cypher -> scoped message-inbox-dev --ack\n'
 printf 'plaintext: %s\n' "$plaintext"
 printf 'workspace: %s\n' "$work_dir"
 printf 'boundary: dev/pre-alpha wrapper smoke proof; not local-backbone; not production messaging UX\n'
