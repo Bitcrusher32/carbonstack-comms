@@ -1,5 +1,6 @@
 mod cli;
 mod envelope;
+mod keypackage_inspect;
 mod labels;
 mod paths;
 mod provider;
@@ -47,6 +48,7 @@ fn main() {
         Some("identity-create") => handle_identity_create(&args[2..]),
         Some("identity-status") => handle_identity_status(&args[2..]),
         Some("public-bundle-export") => handle_public_bundle_export(&args[2..]),
+        Some("keypackage-inspect") => keypackage_inspect::handle_keypackage_inspect(&args[2..]),
         Some("conversation-create") => handle_conversation_create(&args[2..]),
         Some("conversation-load-check") => handle_conversation_load_check(&args[2..]),
         Some("conversation-add-member") => handle_conversation_add_member(&args[2..]),
@@ -68,6 +70,7 @@ fn print_help() {
     println!("Supported commands:");
     println!("  provider-info");
     println!("  identity-create --device-label <label>");
+    println!("  keypackage-inspect --device-label <label> --keypackage <path>");
     println!();
     println!("Unsupported intentionally:");
     for command in UNSUPPORTED_COMMANDS {

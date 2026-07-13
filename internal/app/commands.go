@@ -64,6 +64,8 @@ func Run(args []string) error {
 		return cmdOpenMLSIdentityStatusDev(args[1:])
 	case "openmls-bundle-export-dev":
 		return cmdOpenMLSBundleExportDev(args[1:])
+	case "openmls-keypackage-inspect-dev":
+		return cmdOpenMLSKeyPackageInspectDev(args[1:])
 	case "openmls-conversation-create-dev":
 		return cmdOpenMLSConversationCreateDev(args[1:])
 	case "openmls-conversation-load-check-dev":
@@ -108,6 +110,7 @@ func usage() {
 	fmt.Println("  openmls-identity-create-dev")
 	fmt.Println("  openmls-identity-status-dev")
 	fmt.Println("  openmls-bundle-export-dev")
+	fmt.Println("  openmls-keypackage-inspect-dev")
 	fmt.Println("  openmls-conversation-create-dev")
 	fmt.Println("  openmls-conversation-load-check-dev")
 	fmt.Println("  openmls-conversation-add-member-dev")

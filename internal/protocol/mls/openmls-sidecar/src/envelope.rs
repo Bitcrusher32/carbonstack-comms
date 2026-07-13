@@ -25,6 +25,7 @@ pub const CAPABILITIES: &[&str] = &[
     "identity-create",
     "identity-status",
     "public-bundle-export",
+    "keypackage-inspect",
     "conversation-create",
     "conversation-load-check",
     "conversation-add-member",
