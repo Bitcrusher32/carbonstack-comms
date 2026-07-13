@@ -12,6 +12,7 @@ func cmdOpenMLSKeyPackageInspectDev(args []string) error {
 	sidecarDir := fs.String("sidecar-dir", defaultOpenMLSSidecarDir, "OpenMLS sidecar directory")
 	sidecarDeviceLabel := fs.String("sidecar-device-label", "", "local OpenMLS sidecar device label used for ownership evidence")
 	keyPackagePath := fs.String("keypackage", "", "serialized OpenMLS KeyPackage artifact path")
+	generationManifest := fs.String("generation-manifest", "", "optional immutable KeyPackage generation manifest path")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -19,13 +20,24 @@ func cmdOpenMLSKeyPackageInspectDev(args []string) error {
 		return errors.New("--sidecar-device-label and --keypackage are required")
 	}
 
-	envelope, err := runOpenMLSBootstrapSidecarForCommand(
-		*sidecarDir,
-		"keypackage-inspect",
+	sidecarArgs := []string{
 		"--device-label",
 		*sidecarDeviceLabel,
 		"--keypackage",
 		*keyPackagePath,
+	}
+	if *generationManifest != "" {
+		sidecarArgs = append(
+			sidecarArgs,
+			"--generation-manifest",
+			*generationManifest,
+		)
+	}
+
+	envelope, err := runOpenMLSBootstrapSidecarForCommand(
+		*sidecarDir,
+		"keypackage-inspect",
+		sidecarArgs...,
 	)
 	if err != nil {
 		return err
@@ -56,6 +68,7 @@ func cmdOpenMLSKeyPackageInspectDev(args []string) error {
 	bootstrapPrintOptionalBool("openmls_validation_passed", envelope.Data)
 	bootstrapPrintOptionalBool("owner_match", envelope.Data)
 	bootstrapPrintOptionalString("owner_evidence", envelope.Data)
+	bootstrapPrintOptionalString("generation_manifest_path", envelope.Data)
 	bootstrapPrintOptionalString("identity_binding", envelope.Data)
 	bootstrapPrintOptionalBool("local_state_mutated", envelope.Data)
 	fmt.Println("warning: read-only dev KeyPackage inspection; local sidecar ownership evidence is not account, device, Relay Space, human identity, or trust verification")

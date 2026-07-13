@@ -1,6 +1,7 @@
 mod cli;
 mod envelope;
 mod keypackage_inspect;
+mod keypackage_rotation;
 mod labels;
 mod paths;
 mod provider;
@@ -49,6 +50,11 @@ fn main() {
         Some("identity-status") => handle_identity_status(&args[2..]),
         Some("public-bundle-export") => handle_public_bundle_export(&args[2..]),
         Some("keypackage-inspect") => keypackage_inspect::handle_keypackage_inspect(&args[2..]),
+        Some("keypackage-generate") => keypackage_rotation::handle_keypackage_generate(&args[2..]),
+        Some("keypackage-inventory") => {
+            keypackage_rotation::handle_keypackage_inventory(&args[2..])
+        }
+        Some("keypackage-retire") => keypackage_rotation::handle_keypackage_retire(&args[2..]),
         Some("conversation-create") => handle_conversation_create(&args[2..]),
         Some("conversation-load-check") => handle_conversation_load_check(&args[2..]),
         Some("conversation-add-member") => handle_conversation_add_member(&args[2..]),
@@ -70,7 +76,12 @@ fn print_help() {
     println!("Supported commands:");
     println!("  provider-info");
     println!("  identity-create --device-label <label>");
-    println!("  keypackage-inspect --device-label <label> --keypackage <path>");
+    println!(
+        "  keypackage-inspect --device-label <label> --keypackage <path> [--generation-manifest <path>]"
+    );
+    println!("  keypackage-generate --device-label <label> --request-id <safe-id>");
+    println!("  keypackage-inventory --device-label <label>");
+    println!("  keypackage-retire --device-label <label> --generation-id <generation-id>");
     println!();
     println!("Unsupported intentionally:");
     for command in UNSUPPORTED_COMMANDS {

@@ -53,6 +53,8 @@ pub fn handle_keypackage_inspect(args: &[String]) {
         }
     };
 
+    let generation_manifest_path = option_value(args, "--generation-manifest");
+
     if let Err(reason) = validate_device_label(device_label) {
         print_failure(
             "invalid_device_label",
@@ -61,7 +63,11 @@ pub fn handle_keypackage_inspect(args: &[String]) {
         process::exit(2);
     }
 
-    match inspect_keypackage(device_label, Path::new(keypackage_path)) {
+    match inspect_keypackage(
+        device_label,
+        Path::new(keypackage_path),
+        generation_manifest_path.map(|value| Path::new(value)),
+    ) {
         Ok(data) => {
             let envelope = json!({
                 "ok": true,
@@ -92,7 +98,11 @@ pub fn handle_keypackage_inspect(args: &[String]) {
     }
 }
 
-fn inspect_keypackage(device_label: &str, keypackage_path: &Path) -> Result<Value, InspectError> {
+fn inspect_keypackage(
+    device_label: &str,
+    keypackage_path: &Path,
+    generation_manifest_path: Option<&Path>,
+) -> Result<Value, InspectError> {
     if !keypackage_path.is_file() {
         return Err(InspectError::new(
             "keypackage_artifact_missing",
@@ -173,50 +183,100 @@ fn inspect_keypackage(device_label: &str, keypackage_path: &Path) -> Result<Valu
         .as_secs();
     let valid_at_inspection_time = classify_lifetime(inspected_at, not_before, not_after)?;
 
-    let summary_path = public_bundle_summary_path(device_label);
-    let manifest_path = public_bundle_manifest_path(device_label);
-    let summary = read_json(&summary_path, "public_bundle_summary")?;
-    let manifest = read_json(&manifest_path, "public_bundle_manifest")?;
+    let (owner_match, owner_evidence, owner_manifest_path) = if let Some(generation_manifest_path) =
+        generation_manifest_path
+    {
+        let generation_manifest =
+            read_json(generation_manifest_path, "keypackage_generation_manifest")?;
+        let manifest_device = required_string(
+            &generation_manifest,
+            "device_label",
+            "keypackage_generation_manifest",
+        )?;
+        let manifest_ref = required_string(
+            &generation_manifest,
+            "key_package_ref",
+            "keypackage_generation_manifest",
+        )?;
+        let manifest_sha = required_string(
+            &generation_manifest,
+            "artifact_sha256",
+            "keypackage_generation_manifest",
+        )?;
+        let manifest_size = required_u64(
+            &generation_manifest,
+            "artifact_size_bytes",
+            "keypackage_generation_manifest",
+        )?;
+        let manifest_not_before = required_u64(
+            &generation_manifest,
+            "lifetime_not_before_unix",
+            "keypackage_generation_manifest",
+        )?;
+        let manifest_not_after = required_u64(
+            &generation_manifest,
+            "lifetime_not_after_unix",
+            "keypackage_generation_manifest",
+        )?;
+        (
+            manifest_device == device_label
+                && manifest_ref == key_package_ref
+                && manifest_sha == artifact_sha256
+                && manifest_size == artifact_size as u64
+                && manifest_not_before == not_before
+                && manifest_not_after == not_after,
+            "local-sidecar-keypackage-generation-manifest",
+            Some(generation_manifest_path.to_string_lossy().to_string()),
+        )
+    } else {
+        let summary_path = public_bundle_summary_path(device_label);
+        let manifest_path = public_bundle_manifest_path(device_label);
+        let summary = read_json(&summary_path, "public_bundle_summary")?;
+        let manifest = read_json(&manifest_path, "public_bundle_manifest")?;
 
-    let summary_device = required_string(&summary, "device_label", "public_bundle_summary")?;
-    let manifest_device = required_string(&manifest, "device_label", "public_bundle_manifest")?;
-    let summary_ref = required_string(&summary, "key_package_ref", "public_bundle_summary")?;
-    let manifest_ref = required_string(&manifest, "key_package_ref", "public_bundle_manifest")?;
-    let summary_sha = required_string(
-        &summary,
-        "key_package_artifact_sha256",
-        "public_bundle_summary",
-    )?;
-    let manifest_sha = required_string(
-        &manifest,
-        "key_package_artifact_sha256",
-        "public_bundle_manifest",
-    )?;
-    let summary_size = required_u64(
-        &summary,
-        "key_package_artifact_size_bytes",
-        "public_bundle_summary",
-    )?;
-    let manifest_size = required_u64(
-        &manifest,
-        "key_package_artifact_size_bytes",
-        "public_bundle_manifest",
-    )?;
-
-    let owner_match = summary_device == device_label
-        && manifest_device == device_label
-        && summary_ref == key_package_ref
-        && manifest_ref == key_package_ref
-        && summary_sha == artifact_sha256
-        && manifest_sha == artifact_sha256
-        && summary_size == artifact_size as u64
-        && manifest_size == artifact_size as u64;
+        let summary_device = required_string(&summary, "device_label", "public_bundle_summary")?;
+        let manifest_device = required_string(&manifest, "device_label", "public_bundle_manifest")?;
+        let summary_ref = required_string(&summary, "key_package_ref", "public_bundle_summary")?;
+        let manifest_ref = required_string(&manifest, "key_package_ref", "public_bundle_manifest")?;
+        let summary_sha = required_string(
+            &summary,
+            "key_package_artifact_sha256",
+            "public_bundle_summary",
+        )?;
+        let manifest_sha = required_string(
+            &manifest,
+            "key_package_artifact_sha256",
+            "public_bundle_manifest",
+        )?;
+        let summary_size = required_u64(
+            &summary,
+            "key_package_artifact_size_bytes",
+            "public_bundle_summary",
+        )?;
+        let manifest_size = required_u64(
+            &manifest,
+            "key_package_artifact_size_bytes",
+            "public_bundle_manifest",
+        )?;
+        (
+            summary_device == device_label
+                && manifest_device == device_label
+                && summary_ref == key_package_ref
+                && manifest_ref == key_package_ref
+                && summary_sha == artifact_sha256
+                && manifest_sha == artifact_sha256
+                && summary_size == artifact_size as u64
+                && manifest_size == artifact_size as u64,
+            "local-sidecar-public-bundle-summary-and-manifest",
+            None,
+        )
+    };
 
     if !owner_match {
         return Err(InspectError::new(
             "keypackage_owner_mismatch",
             format!(
-                "KeyPackage artifact does not match local public-bundle summary/manifest for device label {device_label}"
+                "KeyPackage artifact does not match local ownership metadata for device label {device_label}"
             ),
             5,
         ));
@@ -234,7 +294,8 @@ fn inspect_keypackage(device_label: &str, keypackage_path: &Path) -> Result<Valu
         "valid_at_inspection_time": valid_at_inspection_time,
         "openmls_validation_passed": true,
         "owner_match": true,
-        "owner_evidence": "local-sidecar-public-bundle-summary-and-manifest",
+        "owner_evidence": owner_evidence,
+        "generation_manifest_path": owner_manifest_path,
         "identity_binding": "local-sidecar-device-label-only",
         "local_state_mutated": false,
         "private_material_included": false
