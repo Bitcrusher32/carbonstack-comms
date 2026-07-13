@@ -181,6 +181,30 @@ type ListRelaySpaceMembersResponse struct {
 	Members      []RelaySpaceMemberResponse `json:"members"`
 }
 
+type PublishRelaySpaceKeyPackageInput struct {
+	SenderDeviceID    string `json:"sender_device_id"`
+	RecipientDeviceID string `json:"recipient_device_id"`
+	KeyPackageRef     string `json:"key_package_ref"`
+	CiphertextB64     string `json:"ciphertext_b64"`
+	ClientCreatedAt   string `json:"client_created_at,omitempty"`
+}
+
+type PublishRelaySpaceKeyPackageResponse struct {
+	EnvelopeID                string `json:"envelope_id"`
+	RelaySpaceID              string `json:"relay_space_id"`
+	SenderDeviceID            string `json:"sender_device_id"`
+	RecipientDeviceID         string `json:"recipient_device_id"`
+	KeyPackageRef             string `json:"key_package_ref"`
+	ContentType               string `json:"content_type"`
+	ProtocolVersion           string `json:"protocol_version"`
+	DeliveryState             string `json:"delivery_state"`
+	ServerReceivedAt          string `json:"server_received_at"`
+	PayloadSHA256             string `json:"payload_sha256"`
+	PayloadSizeBytes          int64  `json:"payload_size_bytes"`
+	PublicationClassification string `json:"publication_classification"`
+	Idempotent                bool   `json:"idempotent"`
+}
+
 type SubmitRelaySpaceEnvelopeResponse struct {
 	EnvelopeID       string `json:"envelope_id"`
 	RelaySpaceID     string `json:"relay_space_id"`
@@ -361,6 +385,23 @@ func (c CypherClient) RegisterRelaySpaceMember(relaySpaceID string, input Regist
 func (c CypherClient) ListRelaySpaceMembers(relaySpaceID string) (ListRelaySpaceMembersResponse, error) {
 	var resp ListRelaySpaceMembersResponse
 	err := getJSON(c.endpoint("/v0/relay-spaces/"+url.PathEscape(relaySpaceID)+"/members"), &resp)
+	return resp, err
+}
+
+func (c CypherClient) PublishRelaySpaceKeyPackage(
+	relaySpaceID string,
+	input PublishRelaySpaceKeyPackageInput,
+) (PublishRelaySpaceKeyPackageResponse, error) {
+	var resp PublishRelaySpaceKeyPackageResponse
+	err := postJSON(
+		c.endpoint(
+			"/v0/relay-spaces/"+
+				url.PathEscape(relaySpaceID)+
+				"/keypackage-publications",
+		),
+		input,
+		&resp,
+	)
 	return resp, err
 }
 
