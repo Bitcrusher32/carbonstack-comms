@@ -126,6 +126,22 @@ type CreateRelaySpaceInviteInput struct {
 	Note               string `json:"note,omitempty"`
 }
 
+type ClaimRelaySpaceInviteInput struct {
+	InviteToken  string `json:"invite_token"`
+	AccountID    string `json:"account_id"`
+	DeviceID     string `json:"device_id"`
+	DisplayLabel string `json:"display_label,omitempty"`
+}
+
+type ClaimRelaySpaceInviteResponse struct {
+	RelaySpace          RelaySpaceResponse       `json:"relay_space"`
+	RoutingMember       RelaySpaceMemberResponse `json:"routing_member"`
+	RelaySpaceInvite    RelaySpaceInviteResponse `json:"relay_space_invite"`
+	ClaimClassification string                   `json:"claim_classification"`
+	Idempotent          bool                     `json:"idempotent"`
+	ClaimConsumed       bool                     `json:"claim_consumed"`
+}
+
 type RelaySpaceMemberResponse struct {
 	RoutingMemberID string `json:"routing_member_id"`
 	RelaySpaceID    string `json:"relay_space_id"`
@@ -288,6 +304,18 @@ func (c CypherClient) GetRelaySpace(relaySpaceID string) (RelaySpaceResponse, er
 func (c CypherClient) CreateRelaySpaceInvite(relaySpaceID string, input CreateRelaySpaceInviteInput) (CreateRelaySpaceInviteResponse, error) {
 	var resp CreateRelaySpaceInviteResponse
 	err := postJSON(c.endpoint("/v0/relay-spaces/"+url.PathEscape(relaySpaceID)+"/invites"), input, &resp)
+	return resp, err
+}
+
+func (c CypherClient) ClaimRelaySpaceInvite(
+	input ClaimRelaySpaceInviteInput,
+) (ClaimRelaySpaceInviteResponse, error) {
+	var resp ClaimRelaySpaceInviteResponse
+	err := postJSON(
+		c.endpoint("/v0/relay-spaces/invites/claim"),
+		input,
+		&resp,
+	)
 	return resp, err
 }
 

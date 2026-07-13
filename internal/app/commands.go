@@ -72,6 +72,8 @@ func Run(args []string) error {
 		return cmdOpenMLSConversationAddMemberDev(args[1:])
 	case "openmls-conversation-join-dev":
 		return cmdOpenMLSConversationJoinDev(args[1:])
+	case "relay-space-invite-claim-dev":
+		return cmdRelaySpaceInviteClaimDev(args[1:])
 	case "openmls-relay-keypackage-submit-dev":
 		return cmdOpenMLSRelayKeyPackageSubmitDev(args[1:])
 	case "openmls-relay-keypackage-inbox-dev":
@@ -110,6 +112,7 @@ func usage() {
 	fmt.Println("  openmls-conversation-join-dev")
 	fmt.Println("")
 	fmt.Println("Relay Space onboarding/artifact dev paths:")
+	fmt.Println("  relay-space-invite-claim-dev")
 	fmt.Println("  openmls-relay-keypackage-submit-dev")
 	fmt.Println("  openmls-relay-keypackage-inbox-dev")
 	fmt.Println("  openmls-relay-welcome-submit-dev")
