@@ -126,6 +126,19 @@ type CreateRelaySpaceInviteInput struct {
 	Note               string `json:"note,omitempty"`
 }
 
+type UpdateRelaySpaceMemberStateInput struct {
+	TargetState string `json:"target_state"`
+}
+
+type RelaySpaceMemberStateResponse struct {
+	RoutingMember            RelaySpaceMemberResponse `json:"routing_member"`
+	PreviousState            string                   `json:"previous_state"`
+	CurrentState             string                   `json:"current_state"`
+	TransitionClassification string                   `json:"transition_classification"`
+	Idempotent               bool                     `json:"idempotent"`
+	TransitionedAt           string                   `json:"transitioned_at,omitempty"`
+}
+
 type ClaimRelaySpaceInviteInput struct {
 	InviteToken  string `json:"invite_token"`
 	AccountID    string `json:"account_id"`
@@ -304,6 +317,26 @@ func (c CypherClient) GetRelaySpace(relaySpaceID string) (RelaySpaceResponse, er
 func (c CypherClient) CreateRelaySpaceInvite(relaySpaceID string, input CreateRelaySpaceInviteInput) (CreateRelaySpaceInviteResponse, error) {
 	var resp CreateRelaySpaceInviteResponse
 	err := postJSON(c.endpoint("/v0/relay-spaces/"+url.PathEscape(relaySpaceID)+"/invites"), input, &resp)
+	return resp, err
+}
+
+func (c CypherClient) UpdateRelaySpaceMemberState(
+	relaySpaceID string,
+	routingMemberID string,
+	input UpdateRelaySpaceMemberStateInput,
+) (RelaySpaceMemberStateResponse, error) {
+	var resp RelaySpaceMemberStateResponse
+	err := postJSON(
+		c.endpoint(
+			"/v0/relay-spaces/"+
+				url.PathEscape(relaySpaceID)+
+				"/members/"+
+				url.PathEscape(routingMemberID)+
+				"/state",
+		),
+		input,
+		&resp,
+	)
 	return resp, err
 }
 
