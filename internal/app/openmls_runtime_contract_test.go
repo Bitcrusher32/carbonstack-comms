@@ -405,10 +405,12 @@ func stubOpenMLSSendDevHooks(t *testing.T) func() {
 
 	oldProtect := runOpenMLSMessageProtectForCommand
 	oldSubmit := submitOpenMLSArtifactEnvelopeForCommand
+	oldRelaySpaceSubmit := submitRelaySpaceOpenMLSArtifactEnvelopeForMessageCommand
 
 	return func() {
 		runOpenMLSMessageProtectForCommand = oldProtect
 		submitOpenMLSArtifactEnvelopeForCommand = oldSubmit
+		submitRelaySpaceOpenMLSArtifactEnvelopeForMessageCommand = oldRelaySpaceSubmit
 	}
 }
 

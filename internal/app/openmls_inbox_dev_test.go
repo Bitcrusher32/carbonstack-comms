@@ -176,6 +176,8 @@ func stubInboxDevHooks(t *testing.T) func() {
 
 	oldInbox := inboxForCommand
 	oldAck := ackEnvelopeForCommand
+	oldRelaySpaceInbox := relaySpaceOpenMLSArtifactInboxForMessageCommand
+	oldRelaySpaceAck := ackRelaySpaceEnvelopeForMessageCommand
 	oldWrite := writeOpenMLSArtifactFromEnvelopeForCommand
 	oldOpen := runOpenMLSMessageOpenForCommand
 
@@ -189,6 +191,8 @@ func stubInboxDevHooks(t *testing.T) func() {
 	return func() {
 		inboxForCommand = oldInbox
 		ackEnvelopeForCommand = oldAck
+		relaySpaceOpenMLSArtifactInboxForMessageCommand = oldRelaySpaceInbox
+		ackRelaySpaceEnvelopeForMessageCommand = oldRelaySpaceAck
 		writeOpenMLSArtifactFromEnvelopeForCommand = oldWrite
 		runOpenMLSMessageOpenForCommand = oldOpen
 	}
