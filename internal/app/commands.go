@@ -100,6 +100,8 @@ func Run(args []string) error {
 		return cmdOpenMLSRelayAddMemberDev(args[1:])
 	case "openmls-relay-join-dev":
 		return cmdOpenMLSRelayJoinDev(args[1:])
+	case "openmls-relay-welcome-consume-dev":
+		return cmdOpenMLSRelayWelcomeConsumeDev(args[1:])
 	default:
 		return fmt.Errorf("unknown command: %s", args[0])
 	}
@@ -140,6 +142,7 @@ func usage() {
 	fmt.Println("  openmls-relay-welcome-inbox-dev")
 	fmt.Println("  openmls-relay-add-member-dev")
 	fmt.Println("  openmls-relay-join-dev")
+	fmt.Println("  openmls-relay-welcome-consume-dev")
 	fmt.Println("")
 	fmt.Println("Local identity/trust/device helpers:")
 	fmt.Println("  init")
