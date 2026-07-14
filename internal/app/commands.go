@@ -104,6 +104,8 @@ func Run(args []string) error {
 		return cmdOpenMLSRelayWelcomeConsumeDev(args[1:])
 	case "openmls-cypher-mls-mismatch-inspect-dev":
 		return cmdOpenMLSCypherMLSMismatchInspectDev(args[1:])
+	case "workflow-relay-onboarding-dev":
+		return cmdWorkflowRelayOnboardingDev(args[1:])
 	default:
 		return fmt.Errorf("unknown command: %s", args[0])
 	}
@@ -146,6 +148,7 @@ func usage() {
 	fmt.Println("  openmls-relay-join-dev")
 	fmt.Println("  openmls-relay-welcome-consume-dev")
 	fmt.Println("  openmls-cypher-mls-mismatch-inspect-dev")
+	fmt.Println("  workflow-relay-onboarding-dev")
 	fmt.Println("")
 	fmt.Println("Local identity/trust/device helpers:")
 	fmt.Println("  init")
