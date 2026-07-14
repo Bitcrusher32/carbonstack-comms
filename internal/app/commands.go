@@ -108,6 +108,8 @@ func Run(args []string) error {
 		return cmdWorkflowRelayOnboardingDev(args[1:])
 	case "state-substrate-inventory-dev":
 		return cmdStateSubstrateInventoryDev(args[1:])
+	case "state-schema-compat-dev":
+		return cmdStateSchemaCompatDev(args[1:])
 	default:
 		return fmt.Errorf("unknown command: %s", args[0])
 	}
@@ -152,6 +154,7 @@ func usage() {
 	fmt.Println("  openmls-cypher-mls-mismatch-inspect-dev")
 	fmt.Println("  workflow-relay-onboarding-dev")
 	fmt.Println("  state-substrate-inventory-dev")
+	fmt.Println("  state-schema-compat-dev")
 	fmt.Println("")
 	fmt.Println("Local identity/trust/device helpers:")
 	fmt.Println("  init")
