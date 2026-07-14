@@ -86,6 +86,8 @@ func Run(args []string) error {
 		return cmdRelaySpaceMemberStateDev(args[1:])
 	case "openmls-relay-keypackage-publish-dev":
 		return cmdOpenMLSRelayKeyPackagePublishDev(args[1:])
+	case "openmls-relay-keypackage-consume-dev":
+		return cmdOpenMLSRelayKeyPackageConsumeDev(args[1:])
 	case "openmls-relay-keypackage-submit-dev":
 		return cmdOpenMLSRelayKeyPackageSubmitDev(args[1:])
 	case "openmls-relay-keypackage-inbox-dev":
@@ -133,6 +135,7 @@ func usage() {
 	fmt.Println("  openmls-relay-keypackage-publish-dev")
 	fmt.Println("  openmls-relay-keypackage-submit-dev")
 	fmt.Println("  openmls-relay-keypackage-inbox-dev")
+	fmt.Println("  openmls-relay-keypackage-consume-dev")
 	fmt.Println("  openmls-relay-welcome-submit-dev")
 	fmt.Println("  openmls-relay-welcome-inbox-dev")
 	fmt.Println("  openmls-relay-add-member-dev")
