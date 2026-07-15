@@ -154,3 +154,31 @@ func writeSchemaCompatJSON(t *testing.T, path string, value any) {
 		t.Fatal(err)
 	}
 }
+
+func TestStateSchemaCompatibilityAllowsPathAndWritePolicyReports(t *testing.T) {
+	tmp := t.TempDir()
+
+	pathPolicy := filepath.Join(tmp, "path-policy.json")
+	writeSchemaCompatJSON(t, pathPolicy, map[string]any{
+		"schema_version": "carbonstack-state-path-policy-report/v0",
+	})
+	pathReport := evaluateStateSchemaCompatibility(stateSchemaCompatibilityInput{
+		Kind: "path-policy-report",
+		Path: pathPolicy,
+	})
+	if pathReport.Action != "allow" || !pathReport.SupportedSchema {
+		t.Fatalf("expected path-policy report allow/supported, got %+v", pathReport)
+	}
+
+	writePolicy := filepath.Join(tmp, "write-policy.json")
+	writeSchemaCompatJSON(t, writePolicy, map[string]any{
+		"schema_version": "carbonstack-state-write-policy-report/v0",
+	})
+	writeReport := evaluateStateSchemaCompatibility(stateSchemaCompatibilityInput{
+		Kind: "write-policy-report",
+		Path: writePolicy,
+	})
+	if writeReport.Action != "allow" || !writeReport.SupportedSchema {
+		t.Fatalf("expected write-policy report allow/supported, got %+v", writeReport)
+	}
+}

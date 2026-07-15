@@ -212,6 +212,18 @@ func evaluateStateSchemaCompatibility(input stateSchemaCompatibilityInput) state
 
 func stateSchemaCompatibilityKinds() map[string]stateSchemaCompatibilityKind {
 	return map[string]stateSchemaCompatibilityKind{
+		"path-policy-report": {
+			Kind:            "path-policy-report",
+			SafetySensitive: true,
+			Supported:       []string{"carbonstack-state-path-policy-report/v0"},
+			Description:     "C3 path policy report",
+		},
+		"write-policy-report": {
+			Kind:            "write-policy-report",
+			SafetySensitive: true,
+			Supported:       []string{"carbonstack-state-write-policy-report/v0"},
+			Description:     "C4 write policy report",
+		},
 		"state-substrate-inventory": {
 			Kind:            "state-substrate-inventory",
 			SafetySensitive: true,
