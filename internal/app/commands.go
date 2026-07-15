@@ -112,6 +112,8 @@ func Run(args []string) error {
 		return cmdStateSchemaCompatDev(args[1:])
 	case "state-path-policy-dev":
 		return cmdStatePathPolicyDev(args[1:])
+	case "state-write-policy-dev":
+		return cmdStateWritePolicyDev(args[1:])
 	default:
 		return fmt.Errorf("unknown command: %s", args[0])
 	}
@@ -158,6 +160,7 @@ func usage() {
 	fmt.Println("  state-substrate-inventory-dev")
 	fmt.Println("  state-schema-compat-dev")
 	fmt.Println("  state-path-policy-dev")
+	fmt.Println("  state-write-policy-dev")
 	fmt.Println("")
 	fmt.Println("Local identity/trust/device helpers:")
 	fmt.Println("  init")
