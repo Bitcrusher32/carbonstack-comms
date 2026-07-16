@@ -40,6 +40,10 @@ func Run(args []string) error {
 		return cmdTrustList(args[1:])
 	case "simulate-key-change":
 		return cmdSimulateKeyChange(args[1:])
+	case "basic-local-trust-posture-dev":
+		return cmdBasicLocalTrustPostureDev(args[1:])
+	case "basic-local-trust-accept-dev":
+		return cmdBasicLocalTrustAcceptDev(args[1:])
 	case "revoke-device":
 		return cmdRevokeDevice(args[1:])
 	case "send":

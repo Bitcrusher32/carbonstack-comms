@@ -70,3 +70,5 @@ Cross-repo validation lives in the main CarbonStack runner:
     carbonstack/tools/carbonstack-validate
 
 Use release-specific runbooks for release-package validation.
+- [31 Gate F F5 Basic Local Trust Posture](31-gate-f-f5-basic-local-trust-posture-v0.md)
+- [32 Gate F F5 Basic Local Trust Closure](32-gate-f-f5-basic-local-trust-closure-v0.md)
