@@ -14,6 +14,8 @@ import (
 	"time"
 )
 
+var basicLocalTrustPostureSlugRE = regexp.MustCompile("[^a-z0-9._-]+")
+
 const basicLocalTrustPostureSchema = "carbonstack-basic-local-trust-posture/v0"
 const basicLocalTrustAcceptanceEventSchema = "carbonstack-basic-local-trust-acceptance-event/v0"
 
@@ -301,7 +303,7 @@ func basicLocalTrustEventID(input basicLocalTrustInput, now time.Time) string {
 
 func safeBasicLocalTrustPathSegment(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
-	re := regexp.MustCompile("[^a-z0-9._-]+")
+	re := basicLocalTrustPostureSlugRE
 	value = re.ReplaceAllString(value, "-")
 	value = strings.Trim(value, ".-")
 	if value == "" {
