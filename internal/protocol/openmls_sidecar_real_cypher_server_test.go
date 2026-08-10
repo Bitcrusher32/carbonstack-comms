@@ -27,8 +27,7 @@ func startRealCypherTestServer(t *testing.T) *realCypherTestServer {
 		t.Fatalf("resolve comms root: %v", err)
 	}
 
-	umbrellaRoot := filepath.Dir(commsRoot)
-	cypherRoot := filepath.Join(umbrellaRoot, "carbonstack-cypher")
+	cypherRoot := resolveTestCypherRoot(t, commsRoot)
 	migrationsDir := filepath.Join(cypherRoot, "migrations")
 
 	if _, err := os.Stat(filepath.Join(cypherRoot, "cmd", "cypher", "main.go")); err != nil {
